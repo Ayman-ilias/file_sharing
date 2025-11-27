@@ -1,0 +1,32 @@
+Core Application Files:
+- ip.py (main application)
+- logo.png
+- logo.svg
+
+Docker & Deployment:
+- Dockerfile
+- docker-compose.yml
+- .dockerignore
+- deploy.sh
+
+Configuration:
+- requirements.txt
+- file-sharing.service (systemd)
+- nginx.conf
+
+Documentation:
+- README.md
+- QUICK_START.md
+- DEPLOYMENT_GUIDE.md
+
+Git Configuration:
+- .gitignore
+
+Directory Structure:
+- uploads/.gitkeep
+
+Files NOT needed in repo:
+- a.py (remove if not needed)
+- b.py (remove if not needed)
+- .venv/ (already in .gitignore)
+- uploads/* (except .gitkeep)
