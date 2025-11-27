@@ -17,11 +17,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY ip.py .
 COPY logo.png .
 
-# Create uploads directory with proper permissions
-RUN mkdir -p uploads && chmod 755 uploads
-
 # Create non-root user for security
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+RUN useradd -m -u 1000 appuser
+
+# Create uploads directory with proper permissions
+RUN mkdir -p uploads && chown -R appuser:appuser /app
+
+# Switch to non-root user
 USER appuser
 
 # Expose port 5000
