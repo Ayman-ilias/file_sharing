@@ -16,7 +16,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application files
 COPY ip.py .
 COPY logo.png .
-COPY logo.svg .
 
 # Create uploads directory with proper permissions
 RUN mkdir -p uploads && chmod 755 uploads
