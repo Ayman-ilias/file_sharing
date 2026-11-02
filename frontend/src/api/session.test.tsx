@@ -58,4 +58,15 @@ describe('useSession', () => {
     await act(() => result.current.logout())
     expect(result.current.lost).toBeNull()
   })
+
+  it('says who signed in, so the upload engine never resumes another user\'s jobs', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => json(200, me))
+    const ids: unknown[] = []
+    const seen = (e: Event) => ids.push((e as CustomEvent).detail?.id)
+    window.addEventListener('fs:signed-in', seen)
+    const { result } = renderHook(() => useSession())
+    await waitFor(() => expect(result.current.me).not.toBeNull())
+    window.removeEventListener('fs:signed-in', seen)
+    expect(ids).toEqual([1])
+  })
 })

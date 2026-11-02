@@ -30,11 +30,14 @@ export function useItems(section: Section, enabled = true) {
       const page = await api.get<ItemPage>(url())
       const fresh = alive(page.items)
       setItems((old) => {
-        if (!page.next) return fresh
+        const ids = new Set(fresh.map((i) => i.id))
+        const first = fresh[0]
+        // live items that arrived while this request was out are newer than its page 1: keep them
+        const live = old.filter((i) => !ids.has(i.id) && !tombstones.current.has(i.id) && (!first || newer(i, first)))
+        if (!page.next) return [...live, ...fresh]
         // keep the older pages already loaded below page 1
         const last = fresh[fresh.length - 1]
-        const ids = new Set(fresh.map((i) => i.id))
-        return [...fresh, ...old.filter((i) => !ids.has(i.id) && (!last || newer(last, i)))]
+        return [...live, ...fresh, ...old.filter((i) => !ids.has(i.id) && (!last || newer(last, i)))]
       })
       setNext((old) => (page.next && itemsRef.current.length > PAGE ? old : page.next))
       setState('ready')

@@ -1,5 +1,7 @@
 // The one way the app talks to the backend: cookie session, CSRF header on every write.
 
+const REQUEST_TIMEOUT = 120_000 // finishing a 10 GiB upload (fsync, move) can take a while
+
 export class ApiError extends Error {
   status: number
   detail: string
@@ -41,7 +43,8 @@ async function request<T>(method: string, path: string, body?: BodyInit, json = 
   const headers: Record<string, string> = {}
   if (method !== 'GET') headers['X-Requested-With'] = 'fs'
   if (json) headers['Content-Type'] = 'application/json'
-  const res = await fetch(path, { method, headers, body, credentials: 'same-origin' })
+  // a dead connection (e.g. after the laptop slept) fails instead of hanging; a TimeoutError is retried
+  const res = await fetch(path, { method, headers, body, credentials: 'same-origin', signal: AbortSignal.timeout(REQUEST_TIMEOUT) })
   const text = await res.text()
   if (!res.ok) throw fail(toError(res.status, text))
   return (text ? JSON.parse(text) : undefined) as T

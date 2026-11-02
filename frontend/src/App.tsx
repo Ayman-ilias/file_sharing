@@ -14,7 +14,14 @@ import { Icon } from './icons'
 
 export default function App() {
   const { me: signedIn, lost, loading, refresh, logout } = useSession()
-  const { jobs } = useUploads()
+  const { jobs, uploader } = useUploads()
+
+  /** Uploads never outlive the session that started them (the next person could be someone else). */
+  async function logOut() {
+    if (uploader.busy() && !window.confirm('Uploads are still sending. Log out and cancel them?')) return
+    await uploader.cancelAll()
+    await logout()
+  }
   const [view, setView] = useState<View>('sharing')
   const [profileOpen, setProfileOpen] = useState(false)
 
@@ -38,7 +45,7 @@ export default function App() {
       <div style={{ position: 'relative' }}>
         <div className="band" />
         <div className="wrap">
-          <Header me={me} onProfile={() => setProfileOpen(true)} onLogout={() => void logout()} />
+          <Header me={me} onProfile={() => setProfileOpen(true)} onLogout={() => void logOut()} />
           <TopTabs value={current} onChange={setView} showStorage={showStorage} />
           {current === 'sharing' ? (
             <div id="view-sharing">

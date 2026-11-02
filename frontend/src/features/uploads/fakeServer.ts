@@ -13,9 +13,9 @@ type Up = {
   path?: string
 }
 
-type Hook = (info: { method: string; path: string; body?: unknown; n?: number }) => unknown
+type Hook = (info: { method: string; path: string; body?: unknown; n?: number; signal?: AbortSignal }) => unknown
 
-export function fakeServer({ chunkSize = 4, delay = 2 } = {}) {
+export function fakeServer({ chunkSize = 4, delay = 2, maxReserved = Infinity } = {}) {
   const ups = new Map<string, Up>()
   const batches = new Map<string, { name: string; done: boolean; item?: Item }>()
   const log: string[] = []
@@ -35,6 +35,9 @@ export function fakeServer({ chunkSize = 4, delay = 2 } = {}) {
     created_at: new Date().toISOString(), expires_at: new Date().toISOString(),
   })
   const items = new Map<string, Item>()
+  /** Bytes promised to unfinished uploads (the server's 20 GiB per-user limit, scaled down). */
+  const reserved = () => [...ups.values()].filter((x) => !x.done)
+    .reduce((sum, x) => sum + x.size - [...x.received].reduce((a, n) => a + Math.min(chunkSize, x.size - n * chunkSize), 0), 0)
 
   async function get<T>(path: string): Promise<T> {
     log.push(`GET ${path}`)
@@ -58,6 +61,7 @@ export function fakeServer({ chunkSize = 4, delay = 2 } = {}) {
     const b = body as Record<string, unknown>
     if (method === 'POST' && path === '/api/uploads') {
       const old = [...ups.values()].find((u) => u.key === b.client_key && u.size === b.size && !u.done && !u.batchId)
+      if (!old && reserved() + Number(b.size) > maxReserved) throw new ApiError(429, 'upload_quota')
       const up = old ?? { id: nextId(), key: String(b.client_key), size: Number(b.size), received: new Set<number>(), done: false }
       ups.set(up.id, up)
       return { upload_id: up.id, chunk_size: chunkSize, received: [...up.received].sort((x, y) => x - y) } as T
@@ -90,7 +94,10 @@ export function fakeServer({ chunkSize = 4, delay = 2 } = {}) {
     if (method === 'POST' && m) {
       const batchId = m[1]
       if (!batches.has(batchId)) throw new ApiError(404, 'not_found')
+      if (batches.get(batchId)!.done) throw new ApiError(409, 'batch_closed')
       const files = b.files as { relative_path: string; size: number; client_key: string }[]
+      const fresh = files.filter((f) => ![...ups.values()].some((u) => u.batchId === batchId && u.path === f.relative_path && u.key === f.client_key))
+      if (reserved() + fresh.reduce((sum, f) => sum + f.size, 0) > maxReserved) throw new ApiError(429, 'upload_quota')
       const out = files.map((f) => {
         let up = [...ups.values()].find((u) => u.batchId === batchId && u.path === f.relative_path && u.key === f.client_key)
         if (!up) {
@@ -111,6 +118,7 @@ export function fakeServer({ chunkSize = 4, delay = 2 } = {}) {
         if (failed.length === mine.length) throw new ApiError(400, 'empty_batch')
         batch.item = item(batch.name, 0, 'folder')
         batch.done = true
+        for (const x of mine) if (!x.done) ups.delete(x.id) // the server drops unfinished files
       }
       return { item: batch.item, failed } as T
     }
@@ -128,7 +136,7 @@ export function fakeServer({ chunkSize = 4, delay = 2 } = {}) {
     stats.maxPerUpload = Math.max(stats.maxPerUpload, inflightPer.get(id)!)
     stats.maxUploads = Math.max(stats.maxUploads, [...inflightPer.values()].filter((v) => v > 0).length)
     try {
-      await hooks.before?.({ method: 'PUT', path, n, body: blob })
+      await hooks.before?.({ method: 'PUT', path, n, body: blob, signal: opts.signal })
       await sleep(delay)
       if (opts.signal?.aborted) throw new DOMException('Aborted', 'AbortError')
       const up = ups.get(id)
@@ -162,5 +170,6 @@ export function memoryStorage() {
     getItem: (k: string) => data.get(k) ?? null,
     setItem: (k: string, v: string) => void data.set(k, v),
     removeItem: (k: string) => void data.delete(k),
+    keys: () => [...data.keys()],
   }
 }

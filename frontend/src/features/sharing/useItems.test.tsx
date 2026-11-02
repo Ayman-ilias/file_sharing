@@ -90,4 +90,18 @@ describe('useItems', () => {
     expect(f.mock.calls.length - before).toBe(2)
     vi.useRealTimers()
   })
+
+  it('a live item that arrives while page 1 is being refetched is kept', async () => {
+    let answer!: (r: Response) => void
+    const f = fakeApi({}).mockImplementation(async () => json(200, { items: [mkItem('a')], next: null }))
+    const { result } = renderHook(() => useItems('private'))
+    await waitFor(() => expect(result.current.state).toBe('ready'))
+    f.mockImplementation(() => new Promise<Response>((r) => { answer = r }))
+    let done!: Promise<void>
+    act(() => { done = result.current.refetch() })
+    act(() => result.current.insert(mkItem('live', { created_at: '2026-11-02T11:00:00Z' })))
+    answer(json(200, { items: [mkItem('a')], next: null }))
+    await act(() => done)
+    expect(result.current.items.map((i) => i.id)).toEqual(['live', 'a'])
+  })
 })

@@ -2,6 +2,7 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { sharedUploader } from './features/uploads/useUploads'
 import { ayman, fakeApi, globalMe, json } from './test/http'
 
 afterEach(() => vi.restoreAllMocks())
@@ -89,5 +90,21 @@ describe('App shell', () => {
     })
     render(<App />)
     expect(await screen.findByText('Nothing private yet')).toBeInTheDocument()
+  })
+
+  it('Log out with uploads running asks first, and cancels them when confirmed', async () => {
+    fakeApi({ 'GET /api/auth/me': () => json(200, ayman), 'POST /api/auth/logout': () => json(204) })
+    const up = sharedUploader()
+    vi.spyOn(up, 'busy').mockReturnValue(true)
+    const cancelAll = vi.spyOn(up, 'cancelAll').mockResolvedValue()
+    const ask = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+    render(<App />)
+    await userEvent.click(await screen.findByRole('link', { name: 'Log out' }))
+    expect(ask).toHaveBeenCalledWith('Uploads are still sending. Log out and cancel them?')
+    expect(cancelAll).not.toHaveBeenCalled()
+    expect(screen.getByRole('tab', { name: 'Sharing' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('link', { name: 'Log out' }))
+    expect(cancelAll).toHaveBeenCalled()
+    expect(await screen.findByRole('heading', { name: 'Southern IoT Files' })).toBeInTheDocument()
   })
 })

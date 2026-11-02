@@ -268,9 +268,11 @@ describe('Uploader: files', () => {
 describe('Uploader: reload', () => {
   it('keeps unfinished jobs; re-picking the file sends only the missing chunks', async () => {
     const storage = memoryStorage()
+    const session = memoryStorage() // the same tab after a reload
     const srv = fakeServer({ chunkSize: 4, delay: 2 })
     const env1 = new EventTarget()
-    const first = new Uploader({ api: srv.api, env: env1, storage, online: () => true, maxChunks: 1 })
+    const first = new Uploader({ api: srv.api, env: env1, storage, session, online: () => true, maxChunks: 1 })
+    env1.dispatchEvent(new CustomEvent('fs:signed-in', { detail: { id: 1 } }))
     const f = file('report.pdf', 20)
     let stop = false
     srv.hooks.before = ({ method, n }) => {
@@ -282,7 +284,9 @@ describe('Uploader: reload', () => {
 
     srv.hooks.before = undefined
     const sentBefore = srv.stats.puts.length
-    const again = new Uploader({ api: srv.api, env: new EventTarget(), storage, online: () => true })
+    const env2 = new EventTarget()
+    const again = new Uploader({ api: srv.api, env: env2, storage, session, online: () => true })
+    env2.dispatchEvent(new CustomEvent('fs:signed-in', { detail: { id: 1 } }))
     expect(again.jobs()).toHaveLength(1)
     expect(again.jobs()[0]).toMatchObject({ name: 'report.pdf', state: 'failed', reason: 'interrupted' })
 
@@ -290,7 +294,9 @@ describe('Uploader: reload', () => {
     await until(() => again.jobs().length === 1 && again.jobs()[0].state === 'done')
     const resent = srv.stats.puts.slice(sentBefore).map((p) => Number(p.split(':')[1]))
     expect(Math.min(...resent)).toBeGreaterThanOrEqual(2)
-    expect(storage.getItem('fs.pending')).toBe('[]')
+    const key = storage.keys().find((k) => k.startsWith('fs.pending:'))!
+    expect(JSON.parse(storage.getItem(key)!).jobs).toEqual([])
+    again.detach()
   })
 })
 

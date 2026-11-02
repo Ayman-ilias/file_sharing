@@ -21,6 +21,13 @@ describe('api client', () => {
     }
   })
 
+  it('gives every JSON request a time limit, so a dead connection fails instead of hanging', async () => {
+    const f = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => reply(200, {}))
+    await api.get('/api/x')
+    await api.send('POST', '/api/y', {})
+    for (const [, init] of f.mock.calls) expect(init?.signal).toBeInstanceOf(AbortSignal)
+  })
+
   it('reads JSON and returns undefined for 204', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(reply(200, { a: 1 })).mockResolvedValueOnce(reply(204))
     expect(await api.get('/api/x')).toEqual({ a: 1 })

@@ -16,7 +16,8 @@ export function useSession() {
       const user = await api.get<Me>('/api/auth/me')
       setMe(user)
       setLost(null)
-      window.dispatchEvent(new Event('fs:signed-in')) // paused uploads continue
+      // paused uploads continue; the id stops them from ever resuming another user's jobs
+      window.dispatchEvent(new CustomEvent('fs:signed-in', { detail: { id: user.id } }))
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) setMe(null)
       else throw e
