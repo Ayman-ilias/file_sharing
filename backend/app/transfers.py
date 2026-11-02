@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db import utcnow
-from app.models import Upload
+from app.models import Item, Upload
 from app.storage import storage_path
 
 # Bidi overrides/isolates: they make "evil‮txt.exe" display as "evilexe.txt".
@@ -195,3 +195,17 @@ def complete_batch_file(db: Session, up: Upload, data_dir: Path) -> None:
     if batch is not None:
         batch.updated_at = now
     db.commit()
+
+
+def folder_zip(item: Item, data_dir: Path):
+    """A stored (uncompressed) zip of a folder, streamed from disk with a known total length.
+
+    Stored: files here are mostly already compressed, and stored entries give an exact length,
+    so the browser shows real progress. Entries over 4 GiB use Zip64 automatically.
+    """
+    from zipstream import ZIP_STORED, ZipStream
+
+    zs = ZipStream(compress_type=ZIP_STORED, sized=True)
+    for e in sorted(item.entries, key=lambda e: e.relative_path):
+        zs.add_path(str(storage_path(data_dir, "files", e.storage_id)), arcname=e.relative_path)
+    return zs

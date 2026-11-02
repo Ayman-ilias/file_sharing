@@ -8,6 +8,7 @@ from urllib.parse import quote
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import Select, and_, exists, or_, select
 from sqlalchemy.orm import Session
@@ -235,3 +236,21 @@ def download_entry(item_id: str, entry_id: str, inline: bool = False,
         raise HTTPException(404, "not_found")
     filename = PurePosixPath(entry.relative_path).name
     return file_response(entry.storage_id, filename, entry.mime, inline)
+
+
+@router.get("/{item_id}/zip")
+def download_zip(item_id: str, request: Request, user: User = Depends(current_user),
+                 db: Session = Depends(get_db)):
+    """The whole folder as one zip, streamed. No Range: single files resume via their own link."""
+    from app.transfers import folder_zip
+
+    item = get_visible(db, user, item_id)
+    if item.kind != "folder":
+        raise HTTPException(400, "not_a_folder")
+    zs = folder_zip(item, request.app.state.settings.data_dir)
+    headers = {
+        "Content-Length": str(len(zs)),
+        "Content-Disposition": f"attachment; filename*=UTF-8''{quote(item.name + '.zip', safe='')}",
+        "Cache-Control": "private, no-store",
+    }
+    return StreamingResponse(iter(zs), media_type="application/zip", headers=headers)
