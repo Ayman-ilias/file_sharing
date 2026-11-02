@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.config import Settings, get_settings
 from app.db import make_engine, make_session_factory, upgrade_db
 from app.models import User
-from app.routers import auth, users
+from app.routers import auth, items, users
 from app.security import RateLimiter, SecurityMiddleware
 
 
@@ -40,6 +40,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.login_limiter = RateLimiter(limit=10, window_s=60)
     app.include_router(auth.router)
     app.include_router(users.router)
+    app.include_router(items.router)
 
     @app.get("/api/health")
     def health() -> dict:
