@@ -142,3 +142,18 @@ def test_storage_path_rejects_non_hex_ids(tmp_path):
             storage_path(tmp_path, "files", bad)
     with pytest.raises(ValueError):
         storage_path(tmp_path, "../x", "a" * 32)
+
+
+@pytest.mark.parametrize("name", ["../x", "<img src=x onerror=alert(1)>.html", "a/b\\c.txt"])
+def test_hostile_names_are_plain_data(client, file_item, make_file_item, db_session,
+                                       app_settings, name):
+    """Review Focus 5: names never touch a path and come back encoded."""
+    from app.models import User
+
+    owner = db_session.get(User, client.me["id"])
+    it = make_file_item(name=name, mime="text/html", sender=owner)
+    h = client.get(f"/api/items/{it.id}/download?inline=1").headers
+    assert h["content-disposition"].startswith("attachment; filename*=UTF-8''")
+    assert unquote(h["content-disposition"].split("''", 1)[1]) == name
+    assert not (app_settings.data_dir / "x").exists()
+    assert not (app_settings.data_dir.parent / "x").exists()

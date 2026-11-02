@@ -17,7 +17,9 @@ class ItemOut(BaseModel):
     sender: UserRef
     recipients: list[UserRef]
     is_global: bool
-    text_body: str | None = None
+    text_body: str | None = None  # lists: first TEXT_PREVIEW_CHARS only; GET /api/items/{id}: all
+    text_truncated: bool = False
+    line_count: int | None = None
     file_count: int | None = None
     created_at: datetime
     expires_at: datetime

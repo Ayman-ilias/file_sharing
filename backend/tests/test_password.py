@@ -65,3 +65,11 @@ def test_password_never_stored_in_plain_text(client, db_session):
     u = db_session.query(User).filter_by(email="h@southerniot.net").one()
     db_session.refresh(u)
     assert u.password_hash.startswith("$argon2id$") and "brand-new-pass-1" not in u.password_hash
+
+
+def test_cannot_set_the_shared_password_as_own(client):
+    """Review fix: the banner would vanish while anyone could still sign in as this user."""
+    login(client, "k@southerniot.net")
+    r = _change(client, TEST_SHARED_PASSWORD, TEST_SHARED_PASSWORD)
+    assert r.status_code == 400 and r.json()["detail"] == "same_as_shared"
+    assert client.get("/api/auth/me").json()["uses_shared_password"] is True

@@ -21,6 +21,7 @@ from app.storage import accel_path, remove_stored
 router = APIRouter(prefix="/api/items", tags=["items"])
 
 UNTITLED_MAX = 80
+TEXT_PREVIEW_CHARS = 2000  # lists carry a preview; the card asks for the rest on "Show all"
 # Shown in the browser only on request (?inline=1); everything else is always a download.
 INLINE_SANDBOXED = {"image/png", "image/jpeg", "image/gif", "image/webp", "video/mp4"}
 INLINE_PLAIN = {"application/pdf"}  # Chromium won't render a sandboxed PDF
@@ -61,8 +62,8 @@ def decode_cursor(cursor: str) -> tuple[datetime, str]:
         raise HTTPException(400, "bad_cursor") from None
 
 
-def to_out(items: list[Item], db: Session) -> list[ItemOut]:
-    """Serialise a page of items with two queries (users + recipients), not one per item."""
+def to_out(items: list[Item], db: Session, *, full: bool = False) -> list[ItemOut]:
+    """Serialise items with two queries (users + recipients). `full=False`: text preview only."""
     if not items:
         return []
     ids = [i.id for i in items]
@@ -80,12 +81,24 @@ def to_out(items: list[Item], db: Session) -> list[ItemOut]:
             sender=UserRef(id=i.sender_id, username=names[i.sender_id]),
             recipients=sorted(recs.get(i.id, []), key=lambda u: u.username),
             is_global=i.is_global,
-            text_body=i.text_body if i.kind == "text" else None,
+            **_text_fields(i, full),
             file_count=i.file_count if i.kind == "folder" else None,
             created_at=i.created_at, expires_at=i.expires_at,
         )
         for i in items
     ]
+
+
+def _text_fields(item: Item, full: bool) -> dict:
+    if item.kind != "text" or item.text_body is None:
+        return {}
+    body = item.text_body
+    truncated = not full and len(body) > TEXT_PREVIEW_CHARS
+    return {
+        "text_body": body[:TEXT_PREVIEW_CHARS] if truncated else body,
+        "text_truncated": truncated,
+        "line_count": len(body.splitlines()),
+    }
 
 
 def resolve_recipients(db: Session, sender: User, ids: list[int]) -> list[User]:
@@ -149,7 +162,7 @@ def create_text(body: TextItemIn, request: Request, user: User = Depends(current
     for r in recipients:
         db.add(ItemRecipient(item_id=item.id, user_id=r.id))
     db.commit()
-    return to_out([item], db)[0]
+    return to_out([item], db, full=True)[0]
 
 
 def get_visible(db: Session, user: User, item_id: str) -> Item:
@@ -173,6 +186,12 @@ def file_response(storage_id: str, filename: str, mime: str, inline: bool) -> Re
         headers["Content-Security-Policy"] = "sandbox"
     media_type = base_mime if show_inline else "application/octet-stream"
     return Response(content=b"", media_type=media_type, headers=headers)
+
+
+@router.get("/{item_id}", response_model=ItemOut)
+def get_item(item_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """One item with its full text (lists only carry a preview)."""
+    return to_out([get_visible(db, user, item_id)], db, full=True)[0]
 
 
 @router.delete("/{item_id}", status_code=204)

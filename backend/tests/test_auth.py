@@ -120,3 +120,35 @@ def test_expired_session_rejected(client, db_session):
         s.expires_at = datetime.now(UTC) - timedelta(seconds=1)
     db_session.commit()
     assert client.get("/api/auth/me").status_code == 401
+
+
+def test_successful_logins_are_not_rate_limited(client):
+    """Review fix: the whole office shares one public IP; only failures should count."""
+    client.post("/api/auth/register", json={"email": "busy@southerniot.net"})
+    codes = [client.post("/api/auth/login", json={"email": "busy@southerniot.net",
+                                                  "password": TEST_SHARED_PASSWORD}).status_code
+             for _ in range(15)]
+    assert codes == [200] * 15
+
+
+def test_failures_still_limited_after_successes(client):
+    client.post("/api/auth/register", json={"email": "z@southerniot.net"})
+    for _ in range(3):
+        client.post("/api/auth/login",
+                    json={"email": "z@southerniot.net", "password": TEST_SHARED_PASSWORD})
+    codes = [client.post("/api/auth/login",
+                         json={"email": "z@southerniot.net", "password": "wrong"}).status_code
+             for _ in range(11)]
+    assert codes[-1] == 429
+    blocked_good = client.post(
+        "/api/auth/login", json={"email": "z@southerniot.net", "password": TEST_SHARED_PASSWORD}
+    )
+    assert blocked_good.status_code == 429  # while blocked, even the right password waits
+
+
+def test_padded_mixed_case_email_logs_in(client):
+    """Review Focus 1: same account, no second registration."""
+    client.post("/api/auth/register", json={"email": "rahim@southerniot.net"})
+    r = client.post("/api/auth/login",
+                    json={"email": " RAHIM@SouthernIoT.net ", "password": TEST_SHARED_PASSWORD})
+    assert r.status_code == 200 and r.json()["email"] == "rahim@southerniot.net"

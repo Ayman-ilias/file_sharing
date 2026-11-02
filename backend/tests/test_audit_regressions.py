@@ -19,7 +19,7 @@ def test_v1_no_auth__every_api_route_needs_a_session(raw_client, app):
         url = re.sub(r"\{[^}]+\}", "x", path)
         for method in ops:
             r = raw_client.request(method.upper(), url, headers={"X-Requested-With": "fs"})
-            assert r.status_code in (401, 422), (method, path, r.status_code)
+            assert r.status_code == 401, (method, path, r.status_code)
             checked += 1
     assert checked >= 10
 

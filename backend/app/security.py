@@ -53,27 +53,61 @@ def client_ip(request: Request, *, trust_x_real_ip: bool) -> str:
 
 
 class RateLimiter:
-    """In-memory sliding window per key. One process (one uvicorn worker) by design."""
+    """In-memory sliding window per key. One process (one uvicorn worker) by design.
 
-    def __init__(self, limit: int, window_s: int):
+    Idle keys are forgotten after `window_s`, and at most `max_keys` keys are kept, so memory
+    stays bounded however many different client IPs show up.
+    """
+
+    def __init__(self, limit: int, window_s: int, *, clock=time.monotonic, max_keys: int = 10_000):
         self.limit = limit
         self.window_s = window_s
+        self.max_keys = max_keys
+        self._clock = clock
         self._hits: dict[str, deque[float]] = {}
         self._lock = threading.Lock()
+        self._last_prune = clock()
 
-    def hit(self, key: str) -> bool:
-        now = time.monotonic()
+    def _trim(self, q: deque[float], now: float) -> None:
+        while q and now - q[0] >= self.window_s:
+            q.popleft()
+
+    def _prune(self, now: float) -> None:
+        if now - self._last_prune >= self.window_s:
+            for k in [k for k, q in self._hits.items() if not q or now - q[-1] >= self.window_s]:
+                del self._hits[k]
+            self._last_prune = now
+        while len(self._hits) > self.max_keys:  # evict the least recently used key
+            oldest = min(self._hits, key=lambda k: self._hits[k][-1] if self._hits[k] else -1)
+            del self._hits[oldest]
+
+    def blocked(self, key: str) -> bool:
+        """True when `key` already used up its attempts; does not count as an attempt."""
+        now = self._clock()
+        with self._lock:
+            q = self._hits.get(key)
+            if not q:
+                return False
+            self._trim(q, now)
+            return len(q) >= self.limit
+
+    def record(self, key: str) -> None:
+        now = self._clock()
         with self._lock:
             q = self._hits.setdefault(key, deque())
-            while q and now - q[0] >= self.window_s:
-                q.popleft()
-            if len(q) >= self.limit:
-                return False
+            self._trim(q, now)
             q.append(now)
-            if len(self._hits) > 10_000:  # forget idle keys
-                for k in [k for k, v in self._hits.items() if not v]:
-                    del self._hits[k]
-            return True
+            self._prune(now)
+
+    def hit(self, key: str) -> bool:
+        """Count an attempt; False when the key was already over the limit."""
+        if self.blocked(key):
+            return False
+        self.record(key)
+        return True
+
+    def size(self) -> int:
+        return len(self._hits)
 
 
 class SecurityMiddleware:

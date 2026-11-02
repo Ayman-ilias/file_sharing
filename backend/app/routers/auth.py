@@ -62,11 +62,20 @@ def check_password(user: User, password: str, settings: Settings) -> bool:
     return verify_password(user.password_hash, password)
 
 
+def _ip(request: Request) -> str:
+    return client_ip(request, trust_x_real_ip=request.app.state.settings.trust_x_real_ip)
+
+
 def _limit(request: Request) -> None:
-    settings = request.app.state.settings
-    ip = client_ip(request, trust_x_real_ip=settings.trust_x_real_ip)
-    if not request.app.state.login_limiter.hit(ip):
+    """Registration: every attempt counts."""
+    if not request.app.state.login_limiter.hit(_ip(request)):
         raise HTTPException(429, "too_many_attempts")
+
+
+def _fail_login(request: Request) -> HTTPException:
+    """Only failed logins count, so a whole office behind one IP can still sign in."""
+    request.app.state.login_limiter.record(_ip(request))
+    return HTTPException(401, "bad_credentials")
 
 
 @router.post("/register", status_code=201)
@@ -91,7 +100,8 @@ def register(body: EmailIn, request: Request, response: Response, db: Session = 
 
 @router.post("/login", response_model=Me)
 def login(body: LoginIn, request: Request, response: Response, db: Session = Depends(get_db)):
-    _limit(request)
+    if request.app.state.login_limiter.blocked(_ip(request)):
+        raise HTTPException(429, "too_many_attempts")
     settings = request.app.state.settings
     try:
         email = normalize_email(body.email, settings.allowed_email_domain)
@@ -100,9 +110,9 @@ def login(body: LoginIn, request: Request, response: Response, db: Session = Dep
     user = db.query(User).filter_by(email=email).one_or_none() if email else None
     if user is None or user.disabled_at is not None:
         verify_password(_DUMMY_HASH, body.password)
-        raise HTTPException(401, "bad_credentials")
+        raise _fail_login(request)
     if not check_password(user, body.password, settings):
-        raise HTTPException(401, "bad_credentials")
+        raise _fail_login(request)
     token = new_session_token()
     db.add(AuthSession(token_hash=token_hash(token), user_id=user.id,
                        expires_at=utcnow() + timedelta(days=settings.session_days)))
@@ -136,6 +146,9 @@ def change_password(body: PasswordIn, request: Request, user: User = Depends(cur
         raise HTTPException(401, "bad_credentials")
     if len(body.new_password) < MIN_PASSWORD_LEN:
         raise HTTPException(400, "too_short")
+    shared = request.app.state.settings.shared_password.get_secret_value()
+    if hmac.compare_digest(body.new_password.encode(), shared.encode()):
+        raise HTTPException(400, "same_as_shared")  # else the warning banner would lie
     user.password_hash = hash_password(body.new_password)
     db.query(AuthSession).filter(
         AuthSession.user_id == user.id, AuthSession.token_hash != request.state.session_hash

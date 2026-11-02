@@ -159,3 +159,36 @@ def test_list_parameters_validated(client):
 
 def test_items_need_sign_in(raw_client):
     assert raw_client.get("/api/items?section=global").status_code == 401
+
+
+def test_list_sends_a_preview_not_the_whole_text(client, make_client):
+    """Review fix: 50 big texts would make every list page ~50 MB (the v1 30 MB-page mistake)."""
+    a = login(client, "ayman@southerniot.net")
+    r = login(make_client(), "rahim@southerniot.net")
+    body = "\n".join(f"line {i} " + "x" * 50 for i in range(500))  # ~29 KB, 500 lines
+    created = _text(a, body, [r.me["id"]]).json()
+    assert created["text_body"] == body and created["text_truncated"] is False  # sender gets it all
+    listed = r.get("/api/items?section=private").json()["items"][0]
+    assert listed["text_truncated"] is True and listed["line_count"] == 500
+    assert len(listed["text_body"]) == 2000 and body.startswith(listed["text_body"])
+    full = r.get(f"/api/items/{created['id']}").json()
+    assert full["text_body"] == body and full["text_truncated"] is False
+
+
+def test_short_text_is_not_truncated(client, make_client):
+    a = login(client, "ayman@southerniot.net")
+    r = login(make_client(), "rahim@southerniot.net")
+    _text(a, "one\ntwo", [r.me["id"]])
+    listed = r.get("/api/items?section=private").json()["items"][0]
+    assert listed["text_body"] == "one\ntwo" and listed["text_truncated"] is False
+    assert listed["line_count"] == 2
+
+
+def test_get_single_item_respects_visibility(client, make_client):
+    a = login(client, "ayman@southerniot.net")
+    r = login(make_client(), "rahim@southerniot.net")
+    o = login(make_client(), "outsider@southerniot.net")
+    item = _text(a, "secret", [r.me["id"]]).json()
+    assert r.get(f"/api/items/{item['id']}").status_code == 200
+    resp = o.get(f"/api/items/{item['id']}")
+    assert resp.status_code == 404 and resp.json() == {"detail": "not_found"}

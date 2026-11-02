@@ -65,3 +65,41 @@ def test_client_ip_trusts_x_real_ip_only_when_configured():
     assert client_ip(req, trust_x_real_ip=True) == "203.0.113.7"
     assert client_ip(req, trust_x_real_ip=False) == "10.0.0.9"
     assert client_ip(_request({}), trust_x_real_ip=True) == "10.0.0.9"
+
+
+class FakeClock:
+    def __init__(self):
+        self.t = 0.0
+
+    def __call__(self):
+        return self.t
+
+
+def test_rate_limiter_forgets_idle_keys():
+    """Review fix: keys were never removed, so memory grew forever."""
+    clock = FakeClock()
+    rl = RateLimiter(limit=3, window_s=60, clock=clock)
+    for i in range(50):
+        rl.record(f"ip{i}")
+    assert rl.size() == 50
+    clock.t = 61
+    rl.record("new")
+    assert rl.size() == 1
+
+
+def test_rate_limiter_caps_total_keys():
+    clock = FakeClock()
+    rl = RateLimiter(limit=3, window_s=60, clock=clock, max_keys=100)
+    for i in range(250):
+        clock.t += 0.01
+        rl.record(f"ip{i}")
+    assert rl.size() <= 100
+
+
+def test_rate_limiter_blocked_does_not_count():
+    rl = RateLimiter(limit=2, window_s=60, clock=FakeClock())
+    assert not rl.blocked("a")
+    rl.record("a")
+    rl.record("a")
+    assert rl.blocked("a") and rl.blocked("a")
+    assert not rl.blocked("b")

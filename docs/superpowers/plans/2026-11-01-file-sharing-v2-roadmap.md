@@ -77,13 +77,14 @@ Visibility rule, used everywhere: a user sees an item if they are its sender, or
 | Method and path | Plan | Request → response |
 |---|---|---|
 | `POST /api/auth/register` | 1 | `{email}` → 201 `{email, username}`; 200 if already registered; 400 `domain_not_allowed`; 400 `reserved` for the global email |
-| `POST /api/auth/login` | 1 | `{email, password}` → 200 `Me` + cookie `fs_session`; 401 `bad_credentials`; 429 when rate-limited |
+| `POST /api/auth/login` | 1 | `{email, password}` → 200 `Me` + cookie `fs_session`; 401 `bad_credentials`; 429 `too_many_attempts` after 10 **failed** logins per client IP per minute (successful logins don't count: the office shares one IP) |
 | `POST /api/auth/logout` | 1 | → 204, cookie cleared |
 | `GET /api/auth/me` | 1 | → `Me` = `{id, email, username, is_global, uses_shared_password}` |
-| `POST /api/auth/password` | 1 | `{current_password, new_password}` → 204; 400 `too_short` (< 10 chars); 401 `bad_credentials`; 403 `global_account` |
+| `POST /api/auth/password` | 1 | `{current_password, new_password}` → 204; 400 `too_short` (< 10 chars) / `same_as_shared`; 401 `bad_credentials`; 403 `global_account` |
 | `GET /api/users` | 1 | → `[{id, username, email}]` of other regular users, sorted by username |
 | `GET /api/items?section=private\|global[&before=<cursor>][&limit=50]` | 1 | → `{items: [Item], next: cursor\|null}` newest first, not expired; limit 1–200 |
 | `POST /api/items/text` | 1 | `{title?, body, recipient_ids, is_global}` → 201 `Item` (no title → first non-empty line, ≤ 80 chars; `is_global` → recipients dropped); 400 `no_recipients` / `too_large` / `empty` / `unknown_recipient` |
+| `GET /api/items/{id}` | 1 | → `Item` with the full text; 404 if not visible |
 | `DELETE /api/items/{id}` | 1 | → 204; 404 if not visible |
 | `GET /api/items/{id}/download[?inline=1]` | 1 | → 200 with `X-Accel-Redirect: /protected/files/<ab>/<id>` and safe headers (see plan 1, task 8) |
 | `GET /api/items/{id}/entries` | 1 | folder → `[{id, relative_path, size}]` |
@@ -103,7 +104,7 @@ Visibility rule, used everywhere: a user sees an item if they are its sender, or
 | `GET /api/vault/items/{id}/blob` | 4 | ciphertext via X-Accel-Redirect |
 | (all `/api/vault/*`) | 4 | 403 `global_account` for the global account |
 
-`Item` = `{id, kind, name, size, mime, sender: {id, username}, recipients: [{id, username}], is_global, text_body (text items only), file_count (folders only), created_at, expires_at}`. Times are ISO 8601 UTC.
+`Item` = `{id, kind, name, size, mime, sender: {id, username}, recipients: [{id, username}], is_global, text_body (text items only), text_truncated, line_count (text only), file_count (folders only), created_at, expires_at}`. Times are ISO 8601 UTC. **Lists carry at most the first 2000 characters of a text** (`text_truncated: true`). `GET /api/items/{id}` returns the whole item; the card's "Show all N lines" calls it (code review 2026-11-02).
 
 ### Frontend contract
 

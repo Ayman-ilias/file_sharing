@@ -22,3 +22,9 @@ backend/
 ```
 
 Built by plans 1, 2, 4 and 5 in `docs/superpowers/plans/`.
+
+## Running
+
+- Tests: `make backend-test` (pytest) · lint: `make backend-lint` (ruff) · dev server: `make backend-dev` (port 8000, dummy password from your shell's `SHARED_PASSWORD`).
+- Always start uvicorn with `--no-server-header`: uvicorn adds `Server: uvicorn` below the ASGI layer, so the app's middleware can't remove it.
+- Run exactly **one** worker: the login rate limiter and (plan 2) live events are in-process.
