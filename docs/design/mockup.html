@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Southern IoT Files</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #303289;
+    --blue: #267dc2;
+    --bg: #f3f5f9;
+    --card: #ffffff;
+    --line: #e6e9ef;
+    --line-2: #f0f2f6;
+    --ink: #111827;
+    --ink-2: #374151;
+    --muted: #6b7280;
+    --faint: #9ca3af;
+    --soft: #f6f7fb;
+    --blue-soft: #e9f2fb;
+    --red: #dc2626;
+    --radius: 16px;
+    --shadow: 0 1px 2px rgba(17,24,39,.04), 0 8px 24px -12px rgba(17,24,39,.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { overflow-x: clip; }
+  body { font-family: Inter, system-ui, -apple-system, sans-serif; color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased; font-size: 14.5px; line-height: 1.5; }
+  button, input, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 0; background: none; }
+  :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  svg { display: block; flex-shrink: 0; }
+
+  /* brand band behind the header (v1 had the full-page purple gradient) */
+  .band { position: absolute; inset: 0 0 auto 0; height: 340px; background: linear-gradient(160deg, #303289 0%, #2a4fa6 55%, #267dc2 100%); z-index: -1; }
+  .band::after { content: ""; position: absolute; inset: auto 0 0 0; height: 120px; background: linear-gradient(to bottom, rgba(243,245,249,0), var(--bg)); }
+
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 20px 80px; position: relative; }
+
+  /* top: account (new) */
+  .account { display: flex; justify-content: flex-end; align-items: center; gap: 12px; padding: 18px 0 0; color: rgba(255,255,255,.85); font-size: 13.5px; }
+  .account .av { width: 30px; height: 30px; border-radius: 50%; background: rgba(255,255,255,.18); color: #fff; display: grid; place-items: center; font-size: 11.5px; font-weight: 600; }
+  .account a { color: #fff; text-decoration: none; font-weight: 500; opacity: .85; }
+  .account a:hover { opacity: 1; }
+
+  /* 1 · header (same as v1: logo, title, subtitle) */
+  header { text-align: center; padding: 8px 0 34px; color: #fff; }
+  .logo { width: 76px; height: 76px; margin: 0 auto 16px; background: #fff; border-radius: 18px; display: grid; place-items: center; box-shadow: 0 10px 30px -10px rgba(0,0,0,.35); }
+  .logo img { width: 48px; height: 48px; }
+  h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+  .tag { opacity: .8; margin-top: 4px; font-size: 15px; }
+
+  /* 2 · notice (same place as v1's auto-delete banner, quieter) */
+  .notice { display: flex; align-items: center; gap: 10px; padding: 12px 16px; margin-bottom: 16px; background: rgba(255,255,255,.92); border: 1px solid rgba(255,255,255,.6); border-radius: 12px; color: var(--ink-2); font-size: 13.5px; box-shadow: var(--shadow); backdrop-filter: blur(6px); }
+  .notice svg { color: var(--blue); }
+
+  /* 3 · upload card with tabs (same as v1) */
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .upload { padding: 8px 24px 24px; }
+  .tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin: 0 -24px 20px; padding: 0 24px; }
+  .tab { display: inline-flex; align-items: center; gap: 8px; height: 52px; padding: 0 14px; color: var(--muted); font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab:hover { color: var(--ink); }
+  .tab.on { color: var(--navy); border-bottom-color: var(--navy); font-weight: 600; }
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 13px; font-weight: 600; color: var(--ink-2); margin-bottom: 7px; }
+  .input, textarea { width: 100%; border: 1px solid var(--line); border-radius: 10px; background: var(--card); padding: 11px 14px; outline: 0; }
+  .input:focus, textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+  textarea { min-height: 140px; resize: vertical; line-height: 1.6; }
+  .count { text-align: right; font-size: 12px; color: var(--faint); margin-top: 6px; }
+
+  /* send to (new) */
+  .to { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px; min-height: 46px; border: 1px solid var(--line); border-radius: 10px; }
+  .to:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+  .chip { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 6px 0 12px; border-radius: 8px; background: var(--soft); border: 1px solid var(--line); font-weight: 500; }
+  .chip.all { background: var(--blue-soft); border-color: #cfe2f4; color: #1d5f96; }
+  .chip button { width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; color: var(--faint); }
+  .chip button:hover { background: var(--line); color: var(--ink); }
+  .to input { flex: 1; min-width: 140px; border: 0; outline: 0; height: 32px; padding: 0 6px; background: transparent; }
+  .to input::placeholder { color: var(--faint); }
+
+  .drop { border: 1.5px dashed #cdd3de; border-radius: 12px; padding: 34px 20px; text-align: center; color: var(--muted); background: var(--soft); }
+  .drop .ic { width: 44px; height: 44px; margin: 0 auto 10px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); display: grid; place-items: center; color: var(--navy); }
+  .drop b { color: var(--ink); font-weight: 600; }
+  .drop small { display: block; margin-top: 4px; color: var(--faint); font-size: 12.5px; }
+
+  /* upload progress (new) */
+  .queue { margin-top: 14px; display: grid; gap: 10px; }
+  .q { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; }
+  .q-top { display: flex; align-items: center; gap: 10px; }
+  .q-top b { font-weight: 500; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .q-top .pct { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .q-top .x { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; color: var(--faint); }
+  .q-top .x:hover { background: var(--soft); color: var(--ink); }
+  .track { height: 5px; border-radius: 99px; background: var(--line-2); margin: 10px 0 7px; overflow: hidden; }
+  .track i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--navy), var(--blue)); transform-origin: left; transform: scaleX(var(--p)); transition: transform .5s ease; }
+  .q-sub { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .q.done .pct { color: #15803d; }
+  .q.done .track i { background: #16a34a; }
+
+  .actions { display: flex; align-items: center; justify-content: space-between; margin-top: 20px; gap: 12px; }
+  .actions small { color: var(--faint); font-size: 12.5px; }
+  .primary { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 22px; border-radius: 11px; background: var(--navy); color: #fff; font-weight: 600; box-shadow: 0 6px 16px -8px rgba(48,50,137,.7); }
+  .primary:hover { background: #26286f; }
+
+  /* 4 · date groups (same as v1, lighter) */
+  .date { display: flex; align-items: center; gap: 12px; margin: 36px 4px 12px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .date::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  /* 5 · item cards (same as v1: one card per item) */
+  .items { display: grid; gap: 10px; }
+  .item { padding: 14px 16px; }
+  .row { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 14px; align-items: center; }
+  .ficon { width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center; background: var(--soft); color: var(--ink-2); }
+  .ficon.pdf { background: #fdecec; color: #c62828; }
+  .ficon.img { background: #e8f6ef; color: #15803d; }
+  .ficon.dir { background: var(--blue-soft); color: var(--blue); }
+  .ficon.txt { background: #eef0f8; color: var(--navy); }
+  .name { display: flex; align-items: center; gap: 6px; font-weight: 600; min-width: 0; }
+  .name span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .toggle { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; color: var(--faint); margin-left: -4px; transition: transform .2s; }
+  .toggle:hover { background: var(--soft); color: var(--ink); }
+  .toggle.open { transform: rotate(90deg); }
+  .meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .meta b { color: var(--ink-2); font-weight: 500; }
+  .everyone { color: #1d5f96; font-weight: 500; }
+  .btns { display: flex; align-items: center; gap: 6px; }
+  .btn { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); font-weight: 500; color: var(--ink); }
+  .btn:hover { border-color: #cfd5df; background: var(--soft); }
+  .btn.copied { color: #15803d; border-color: #bfe8cf; background: #effaf3; }
+  .del { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: var(--faint); }
+  .del:hover { background: #fdecec; color: var(--red); }
+
+  .preview { margin: 12px 0 2px 56px; padding: 14px 16px; background: var(--soft); border-radius: 12px; font-size: 13.5px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); }
+  .preview a { color: var(--blue); text-decoration: none; font-weight: 500; }
+  .preview a:hover { text-decoration: underline; }
+  .inside { margin: 12px 0 2px 56px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .inside span { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 8px; background: var(--soft); color: var(--ink-2); font-size: 13px; }
+
+
+  /* background animation (v1 had floating bubbles; same idea, brand colours, slower) */
+  .bubbles { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+  .bubbles span { position: absolute; bottom: -140px; border-radius: 50%; background: radial-gradient(circle at 32% 30%, rgba(255,255,255,.55), rgba(38,125,194,.16) 60%, rgba(48,50,137,.10)); animation: rise linear infinite; will-change: transform; }
+  @keyframes rise { from { transform: translate(0, 0) scale(.9); } to { transform: translate(var(--drift), -125vh) scale(1.1); } }
+  @media (prefers-reduced-motion: reduce) { .bubbles { display: none; } }
+  .wrap, .loginframe, .label { position: relative; z-index: 1; }
+
+  /* photo: real thumbnail + bigger preview on hover */
+  .item { position: relative; }
+  .thumb { width: 42px; height: 42px; border-radius: 11px; object-fit: cover; display: block; box-shadow: 0 0 0 1px var(--line); }
+  .peek { position: absolute; left: 60px; bottom: calc(100% - 6px); z-index: 20; width: 340px; padding: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 24px 48px -16px rgba(17,24,39,.35); opacity: 0; transform: translateY(8px) scale(.98); transform-origin: bottom left; transition: opacity .18s ease, transform .18s ease; pointer-events: none; }
+  .peek img { width: 100%; height: 220px; object-fit: cover; border-radius: 10px; display: block; }
+  .peek div { display: flex; justify-content: space-between; padding: 8px 4px 2px; font-size: 12.5px; color: var(--muted); }
+  .peek b { color: var(--ink); font-weight: 600; }
+  .item.photo:hover .peek, .item.photo:focus-within .peek { opacity: 1; transform: none; }
+  .item.photo .row { cursor: zoom-in; }
+
+
+  /* full-page animated gradient (replaces the top band) */
+  body { background: #1b1f66; }
+  .bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; background: linear-gradient(135deg, #1a1d5e 0%, #303289 38%, #2a5fb0 70%, #267dc2 100%); }
+  .bg i { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .55; will-change: transform; }
+  .bg .b1 { width: 60vw; height: 60vw; left: -15vw; top: -20vw; background: #4a4fd1; animation: m1 26s ease-in-out infinite alternate; }
+  .bg .b2 { width: 55vw; height: 55vw; right: -18vw; top: 10vh; background: #2a9be0; animation: m2 32s ease-in-out infinite alternate; }
+  .bg .b3 { width: 50vw; height: 50vw; left: 20vw; bottom: -30vw; background: #1f2b8f; animation: m3 38s ease-in-out infinite alternate; }
+  .bg .b4 { width: 35vw; height: 35vw; right: 15vw; bottom: -10vw; background: #3bb3e6; opacity: .35; animation: m1 44s ease-in-out infinite alternate-reverse; }
+  @keyframes m1 { to { transform: translate(18vw, 14vh) scale(1.15); } }
+  @keyframes m2 { to { transform: translate(-20vw, 22vh) scale(.9); } }
+  @keyframes m3 { to { transform: translate(-12vw, -18vh) scale(1.2); } }
+  @media (prefers-reduced-motion: reduce) { .bg i { animation: none; } }
+  .band { display: none; }
+  .bubbles { z-index: 0; }
+  .bubbles span { background: radial-gradient(circle at 32% 30%, rgba(255,255,255,.35), rgba(255,255,255,.08) 60%, rgba(255,255,255,.02)); border: 1px solid rgba(255,255,255,.12); }
+  .date { color: rgba(255,255,255,.78); }
+  .date::after { background: rgba(255,255,255,.18); }
+  .label { color: rgba(255,255,255,.75); }
+  .lpage { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); backdrop-filter: blur(4px); }
+  .item, .upload, .lcard { box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 18px 40px -20px rgba(8,12,48,.55); border-color: rgba(255,255,255,.6); }
+
+
+  /* PDF: the whole card opens the file in a new tab */
+  .item.openable { cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
+  .item.openable:hover { transform: translateY(-1px); box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 22px 44px -18px rgba(8,12,48,.6); }
+  .item.openable .name a { color: inherit; text-decoration: none; }
+  .item.openable .name a::after { content: ""; position: absolute; inset: 0; border-radius: var(--radius); }
+  .item.openable .btns { position: relative; z-index: 1; }
+  .opens { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; font-size: 12px; font-weight: 500; color: var(--blue); opacity: 0; transition: opacity .15s ease; }
+  .item.openable:hover .opens, .item.openable:focus-within .opens { opacity: 1; }
+
+
+  .preview a::after { content: "\2197"; font-size: 11px; margin-left: 3px; opacity: 0; transition: opacity .15s; }
+  .preview a:hover::after { opacity: .8; }
+
+
+  /* private / global switch */
+  .switch-wrap { display: flex; justify-content: center; margin: 40px 0 6px; }
+  .seg { display: inline-flex; padding: 5px; gap: 4px; border-radius: 14px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22); backdrop-filter: blur(8px); }
+  .seg-btn { display: inline-flex; align-items: center; gap: 8px; height: 42px; padding: 0 22px; border-radius: 10px; color: rgba(255,255,255,.85); font-weight: 600; }
+  .seg-btn:hover { color: #fff; background: rgba(255,255,255,.08); }
+  .seg-btn.on { background: #fff; color: var(--navy); box-shadow: 0 6px 18px -8px rgba(8,12,48,.6); }
+  .seg-btn .cnt { min-width: 22px; height: 20px; padding: 0 6px; border-radius: 99px; display: grid; place-items: center; font-size: 11.5px; background: rgba(255,255,255,.2); }
+  .seg-btn.on .cnt { background: var(--blue-soft); color: var(--navy); }
+  .pane-note { text-align: center; color: rgba(255,255,255,.72); font-size: 13px; margin: 8px 0 0; }
+  .pane .date:first-of-type { margin-top: 18px; }
+
+
+  /* top-level tabs: Sharing | My storage */
+  .top-tabs { display: flex; justify-content: center; gap: 4px; width: max-content; margin: -10px auto 26px; padding: 5px; border-radius: 14px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22); backdrop-filter: blur(8px); }
+  .tt { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 26px; border-radius: 10px; color: rgba(255,255,255,.85); font-weight: 600; font-size: 15px; }
+  .tt:hover { color: #fff; background: rgba(255,255,255,.08); }
+  .tt.on { background: #fff; color: var(--navy); box-shadow: 0 6px 18px -8px rgba(8,12,48,.6); }
+
+  /* vault: locked */
+  .vault-lock { max-width: 520px; margin: 0 auto; padding: 36px 32px; text-align: center; }
+  .lock-ic { width: 60px; height: 60px; margin: 0 auto 14px; border-radius: 18px; display: grid; place-items: center; background: #eef0f8; color: var(--navy); }
+  .vault-lock h2 { font-size: 20px; letter-spacing: -0.02em; }
+  .vault-lock p { color: var(--muted); margin: 6px 0 20px; line-height: 1.6; }
+  .unlock { display: flex; gap: 8px; }
+  .unlock .input { flex: 1; }
+  .vault-lock small { display: block; margin-top: 12px; color: var(--faint); font-size: 12.5px; }
+
+  /* vault: open */
+  .vault-head { padding: 18px 20px; }
+  .vh-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .vh-top b { display: block; font-size: 16px; }
+  .enc { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: #15803d; font-weight: 500; }
+  .q-bar { height: 8px; border-radius: 99px; background: var(--line-2); margin: 14px 0 8px; overflow: hidden; }
+  .q-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--navy), var(--blue)); transform-origin: left; transform: scaleX(var(--p)); }
+  .q-foot { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
+  .q-foot b { color: var(--ink); }
+  .vault-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 22px 0 6px; }
+  .kinds { display: flex; gap: 6px; flex-wrap: wrap; }
+  .kind { height: 34px; padding: 0 14px; border-radius: 99px; color: rgba(255,255,255,.85); font-weight: 500; background: rgba(255,255,255,.1); }
+  .kind:hover { background: rgba(255,255,255,.18); color: #fff; }
+  .kind.on { background: #fff; color: var(--navy); }
+  .primary.small { height: 38px; padding: 0 16px; box-shadow: none; background: #fff; color: var(--navy); }
+  .primary.small:hover { background: #eef2ff; }
+  .add-wrap { position: relative; }
+  .add-menu { position: absolute; right: 0; top: 46px; z-index: 30; width: 180px; padding: 6px; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 24px 48px -16px rgba(17,24,39,.35); }
+  .add-menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border-radius: 8px; font-weight: 500; color: var(--ink); }
+  .add-menu button:hover { background: var(--soft); }
+  .vgroup { margin: 22px 4px 10px; font-size: 13px; font-weight: 600; color: rgba(255,255,255,.78); }
+  .vgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .vcard { padding: 16px; display: block; color: inherit; text-decoration: none; }
+  .vc-top { display: flex; align-items: center; gap: 12px; }
+  .vc-top b { display: block; font-weight: 600; }
+  .vc-top small { color: var(--muted); font-size: 12.5px; }
+  .vc-ic { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; }
+  .vc-ic.key { background: #fff4e5; color: #b45309; } .vc-ic.note { background: #eef0f8; color: var(--navy); } .vc-ic.link { background: var(--blue-soft); color: var(--blue); }
+  .secret { display: flex; align-items: center; gap: 4px; margin-top: 12px; padding: 6px 6px 6px 12px; background: var(--soft); border-radius: 10px; }
+  .secret .dots { flex: 1; font-family: ui-monospace, Menlo, monospace; letter-spacing: .08em; color: var(--ink-2); }
+  .mini { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; color: var(--muted); }
+  .mini:hover { background: #fff; color: var(--ink); }
+  .mini.ok { color: #15803d; }
+  .snippet { margin-top: 10px; color: var(--ink-2); font-size: 13.5px; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .linkcard .ext { margin-left: auto; color: var(--faint); }
+  .linkcard:hover { box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 22px 44px -18px rgba(8,12,48,.6); }
+  .linkcard:hover .ext { color: var(--blue); }
+  .photos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .ph { aspect-ratio: 1; border-radius: 14px; background-size: cover; background-position: center; box-shadow: 0 18px 40px -20px rgba(8,12,48,.55); border: 2px solid #fff; cursor: zoom-in; transition: transform .15s ease; }
+  .ph:hover { transform: scale(1.02); }
+  @media (max-width: 640px) { .vgrid { grid-template-columns: minmax(0, 1fr); } .photos { grid-template-columns: repeat(2, minmax(0, 1fr)); } .vault-bar { flex-direction: column; align-items: stretch; } }
+
+
+  /* profile + nudges */
+  .acct-btn { display: inline-flex; align-items: center; gap: 12px; color: inherit; padding: 4px 4px 4px 10px; border-radius: 99px; }
+  .acct-btn:hover { background: rgba(255,255,255,.12); }
+  .nudge { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 10px 10px 10px 14px; border-radius: 12px; background: #fff7e6; border: 1px solid #fde4b0; color: #7c4a03; font-size: 13.5px; }
+  .nudge span { flex: 1; }
+  .nudge button { height: 32px; padding: 0 12px; border-radius: 8px; background: #7c4a03; color: #fff; font-weight: 600; font-size: 13px; white-space: nowrap; }
+  .autolock { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .why-locked { display: inline-block; margin-top: 6px; padding: 3px 10px; border-radius: 99px; background: var(--soft); color: var(--muted); font-size: 12px; }
+  .overlay { position: fixed; inset: 0; z-index: 50; background: rgba(10,14,40,.45); backdrop-filter: blur(3px); display: flex; justify-content: flex-end; }
+  .drawer { width: min(420px, 100%); height: 100%; overflow: auto; background: #fff; padding: 24px; box-shadow: -20px 0 60px -20px rgba(0,0,0,.4); }
+  .dr-head { display: flex; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+  .dr-head b { display: block; font-size: 16px; }
+  .dr-head span { color: var(--muted); font-size: 13px; }
+  .dr-head .mini { margin-left: auto; }
+  .av.big { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--navy); color: #fff; font-weight: 600; }
+  .dr-sec { padding: 20px 0; border-bottom: 1px solid var(--line); }
+  .dr-sec h3 { font-size: 15px; margin-bottom: 4px; }
+  .dr-sec p { color: var(--muted); font-size: 13px; margin-bottom: 14px; line-height: 1.55; }
+  .dr-sec .primary { width: 100%; justify-content: center; }
+  .btn.wide { width: 100%; justify-content: center; height: 42px; }
+  .muted-sec { border-bottom: 0; } .muted-sec p { margin: 0; }
+
+  .hidden { display: none; }
+
+  /* login preview (separate page, same style) */
+  .label { max-width: 880px; margin: 0 auto 12px; padding: 0 20px; font-size: 13px; color: var(--muted); font-weight: 600; }
+  .loginframe { max-width: 880px; margin: 0 auto 60px; padding: 0 20px; }
+  .lpage { position: relative; overflow: hidden; border-radius: 20px; background: var(--bg); padding: 60px 20px; box-shadow: var(--shadow); }
+  .lpage .band { z-index: 0; height: 260px; }
+  .lcard { position: relative; max-width: 380px; margin: 0 auto; padding: 32px; text-align: center; }
+  .lcard .logo { box-shadow: none; border: 1px solid var(--line); width: 64px; height: 64px; }
+  .lcard .logo img { width: 40px; height: 40px; }
+  .lcard h2 { font-size: 21px; letter-spacing: -0.02em; }
+  .lcard p { color: var(--muted); margin: 4px 0 22px; }
+  .lcard .field { text-align: left; }
+  .email { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .email input { flex: 1; min-width: 0; border: 0; outline: 0; padding: 11px 14px; }
+  .email span { padding: 0 14px; color: var(--muted); }
+  .lcard .primary { width: 100%; justify-content: center; margin-top: 6px; }
+  .lcard .switch { margin-top: 16px; color: var(--muted); font-size: 13.5px; }
+  .lcard .switch a { color: var(--navy); font-weight: 600; text-decoration: none; }
+
+  @media (max-width: 640px) {
+    header { padding-bottom: 26px; } h1 { font-size: 24px; }
+    .upload { padding: 4px 16px 18px; } .tabs { margin: 0 -16px 18px; padding: 0 10px; } .tab { padding: 0 10px; }
+    .row { grid-template-columns: 38px minmax(0, 1fr); } .btns { grid-column: 1 / -1; justify-content: flex-end; }
+    .preview, .inside { margin-left: 0; }
+    .actions small { display: none; } .primary { width: 100%; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 6h14M5 11h14M5 16h9"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V9m0 0-4 4m4-4 4 4M5 4h14"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 5h5v5M19 5l-8 8M18 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></symbol>
+  <symbol id="i-video" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M15 8l2 2"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-x2" viewBox="0 0 24 24"></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+</svg>
+
+<div class="bg" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="b4"></i></div>
+<div class="bubbles" aria-hidden="true"></div>
+<div style="position:relative">
+<div class="band"></div>
+<div class="wrap">
+  <div class="account"><button class="acct-btn" onclick="openProfile()"><span>ayman@southerniot.net</span><span class="av">AY</span></button><a href="#">Log out</a></div>
+
+  <header>
+    <div class="logo"><img src="assets/mark.png" alt="Southern IoT"></div>
+    <h1>Southern IoT</h1>
+    <p class="tag">File &amp; Text Sharing</p>
+  </header>
+
+  <nav class="top-tabs" role="tablist" aria-label="Section">
+    <button class="tt on" role="tab" aria-selected="true" data-view="sharing"><svg width="17" height="17"><use href="#i-share"/></svg>Sharing</button>
+    <button class="tt" role="tab" aria-selected="false" data-view="storage"><svg width="17" height="17"><use href="#i-lock"/></svg>My storage</button>
+  </nav>
+
+  <div id="view-sharing">
+  <div class="nudge"><svg width="18" height="18"><use href="#i-shield"/></svg><span>You are still using the shared starting password, so anyone who knows your email can sign in as you.</span><button onclick="openProfile()">Set your own</button></div>
+
+  <div class="notice"><svg width="18" height="18"><use href="#i-clock"/></svg>Everything shared here is deleted automatically after 30 days.</div>
+
+  <section class="card upload">
+    <div class="tabs">
+      <button class="tab on" data-t="text"><svg width="17" height="17"><use href="#i-text"/></svg>Text</button>
+      <button class="tab" data-t="files"><svg width="17" height="17"><use href="#i-file"/></svg>Files</button>
+      <button class="tab" data-t="folder"><svg width="17" height="17"><use href="#i-folder"/></svg>Folder</button>
+    </div>
+
+    <div class="field">
+      <label>Send to</label>
+      <div class="to">
+        <span class="chip">rahim<button aria-label="Remove rahim"><svg width="12" height="12"><use href="#i-x"/></svg></button></span>
+        <span class="chip">nusrat<button aria-label="Remove nusrat"><svg width="12" height="12"><use href="#i-x"/></svg></button></span>
+        <input placeholder="Type a name, or choose Global (everyone)" aria-label="Add recipient">
+      </div>
+    </div>
+
+    <div id="p-text">
+      <div class="field"><label>Title <span style="font-weight:400;color:var(--faint)">(optional)</span></label><input class="input" placeholder="Give your text a name" value="Gateway config for Uttara"></div>
+      <div class="field"><label>Text</label><textarea placeholder="Type or paste text here">Dashboard: https://grafana.southerniot.net/d/uttara
+Gateway IP: 10.10.8.51</textarea><div class="count">72 characters</div></div>
+    </div>
+
+    <div id="p-files" class="hidden">
+      <div class="drop"><div class="ic"><svg width="20" height="20"><use href="#i-up"/></svg></div><b>Drop files here</b> or click to choose<small>Any size up to 10 GB. If your connection drops, it continues where it stopped.</small></div>
+      <div class="queue">
+        <div class="q"><div class="q-top"><b>site-walkthrough-4k.mp4</b><span class="pct" id="pct">58%</span><button class="x" aria-label="Cancel"><svg width="14" height="14"><use href="#i-x"/></svg></button></div>
+          <div class="track"><i id="bar" style="--p:.58"></i></div><div class="q-sub"><span id="amt">1.04 GB of 1.80 GB</span><span id="spd">84.7 MB/s · 9 s left</span></div></div>
+        <div class="q done"><div class="q-top"><b>BOQ-final.xlsx</b><span class="pct">Sent</span></div>
+          <div class="track"><i style="--p:1"></i></div><div class="q-sub"><span>2.3 MB</span><span>to rahim, nusrat</span></div></div>
+      </div>
+    </div>
+
+    <div id="p-folder" class="hidden">
+      <div class="drop"><div class="ic"><svg width="20" height="20"><use href="#i-folder"/></svg></div><b>Drop a folder here</b> or click to choose<small>The folder structure is kept.</small></div>
+    </div>
+
+    <div class="actions"><small>Choose Global to share with everyone.</small><button class="primary" id="sendbtn">Send<svg width="16" height="16"><use href="#i-send"/></svg></button></div>
+  </section>
+
+  <div class="switch-wrap">
+    <div class="seg" role="tablist" aria-label="Which files">
+      <button class="seg-btn on" role="tab" aria-selected="true" data-pane="private"><svg width="16" height="16"><use href="#i-lock"/></svg>Private<span class="cnt">4</span></button>
+      <button class="seg-btn" role="tab" aria-selected="false" data-pane="global"><svg width="16" height="16"><use href="#i-globe"/></svg>Global<span class="cnt">3</span></button>
+    </div>
+  </div>
+
+  <section class="pane" id="pane-private">
+    <p class="pane-note">Only you and the people you chose can see these.</p>
+    <div class="date">Today</div>
+    <div class="items">
+    <div class="card item">
+      <div class="row">
+        <div class="ficon txt"><svg width="20" height="20"><use href="#i-text"/></svg></div>
+        <div><div class="name"><button class="toggle open" aria-label="Collapse" onclick="tog(this,'t1')"><svg width="14" height="14"><use href="#i-chev"/></svg></button><span>Gateway config for Uttara</span></div>
+          <div class="meta">From <b>rahim</b> · 2 min ago</div></div>
+        <div class="btns"><button class="btn" onclick="copied(this)"><svg width="15" height="15"><use href="#i-copy"/></svg><span>Copy</span></button><button class="del" aria-label="Delete"><svg width="17" height="17"><use href="#i-trash"/></svg></button></div>
+      </div>
+      <div class="preview" id="t1">Dashboard: <a href="https://grafana.southerniot.net/d/uttara" target="_blank" rel="noopener noreferrer">https://grafana.southerniot.net/d/uttara</a>
+SSID: SIOT-Field-5G
+Gateway IP: 10.10.8.51
+Setup guide: <a href="https://www.southerniot.net" target="_blank" rel="noopener noreferrer">www.southerniot.net</a></div>
+    </div>
+    <div class="card item">
+      <div class="row">
+        <div class="ficon dir"><svg width="20" height="20"><use href="#i-folder"/></svg></div>
+        <div><div class="name"><button class="toggle" aria-label="Show files" onclick="tog(this,'f1')"><svg width="14" height="14"><use href="#i-chev"/></svg></button><span>firmware-v3.2</span></div>
+          <div class="meta">From <b>tanvir</b> · 12 files · 64.2 MB</div></div>
+        <div class="btns"><button class="btn"><svg width="15" height="15"><use href="#i-down"/></svg>Download</button><button class="del" aria-label="Delete"><svg width="17" height="17"><use href="#i-trash"/></svg></button></div>
+      </div>
+      <div class="inside hidden" id="f1"><span>app.hex</span><span>bootloader.bin</span><span>config/gw.json</span><span>README.md</span><span>+8 more</span></div>
+    </div>
+    <div class="card item openable">
+      <div class="row">
+        <div class="ficon pdf"><svg width="20" height="20"><use href="#i-file"/></svg></div>
+        <div><div class="name"><a href="assets/Site-Survey-Report.pdf" target="_blank" rel="noopener"><span>Site-Survey-Report.pdf</span></a><span class="opens">Open in new tab<svg width="12" height="12"><use href="#i-ext"/></svg></span></div>
+          <div class="meta">From <b>you</b> to rahim · 18.4 MB</div></div>
+        <div class="btns"><button class="btn"><svg width="15" height="15"><use href="#i-down"/></svg>Download</button><button class="del" aria-label="Delete"><svg width="17" height="17"><use href="#i-trash"/></svg></button></div>
+      </div>
+    </div>
+    </div>
+    <div class="date">Yesterday</div>
+    <div class="items">
+    <div class="card item">
+      <div class="row">
+        <div class="ficon img" style="background:#e8f6ef;color:#15803d"><svg width="20" height="20"><use href="#i-file"/></svg></div>
+        <div><div class="name"><span>BOQ-final.xlsx</span></div>
+          <div class="meta">From <b>you</b> to rahim, nusrat · 2.3 MB</div></div>
+        <div class="btns"><button class="btn"><svg width="15" height="15"><use href="#i-down"/></svg>Download</button><button class="del" aria-label="Delete"><svg width="17" height="17"><use href="#i-trash"/></svg></button></div>
+      </div>
+    </div>
+    </div>
+  </section>
+
+  <section class="pane hidden" id="pane-global">
+    <p class="pane-note">Everyone at Southern IoT can see these.</p>
+    <div class="date">Today</div>
+    <div class="items">
+    <div class="card item">
+      <div class="row">
+        <div class="ficon" style="background:#f3effd;color:#6d28d9"><svg width="20" height="20"><use href="#i-video"/></svg></div>
+        <div><div class="name"><span>drone-footage-mirpur.mp4</span></div>
+          <div class="meta">From <b>nusrat</b> · 1.8 GB</div></div>
+        <div class="btns"><button class="btn"><svg width="15" height="15"><use href="#i-down"/></svg>Download</button><button class="del" aria-label="Delete"><svg width="17" height="17"><use href="#i-trash"/></svg></button></div>
+      </div>
+    </div>
+    <div class="card item photo">
+      <div class="peek" aria-hidden="true"><img src="assets/sample-photo.jpg" alt=""><div><b>rack-wiring-photo.jpg</b><span>4.1 MB · 4032 × 3024</span></div></div>
+      <div class="row">
+        <img class="thumb" src="assets/sample-photo.jpg" alt="">
+        <div><div class="name"><span>rack-wiring-photo.jpg</span></div>
+          <div class="meta">From <b>arif</b> · 4.1 MB</div></div>
+        <div class="btns"><button class="btn"><svg width="15" height="15"><use href="#i-down"/></svg>Download</button><button class="del" aria-label="Delete"><svg width="17" height="17"><use href="#i-trash"/></svg></button></div>
+      </div>
+    </div>
+    </div>
+    <div class="date">Yesterday</div>
+    <div class="items">
+    <div class="card item">
+      <div class="row">
+        <div class="ficon txt"><svg width="20" height="20"><use href="#i-text"/></svg></div>
+        <div><div class="name"><button class="toggle open" aria-label="Collapse" onclick="tog(this,'t2')"><svg width="14" height="14"><use href="#i-chev"/></svg></button><span>Guest Wi-Fi this week</span></div>
+          <div class="meta">From <b>tasnim</b> · yesterday</div></div>
+        <div class="btns"><button class="btn" onclick="copied(this)"><svg width="15" height="15"><use href="#i-copy"/></svg><span>Copy</span></button><button class="del" aria-label="Delete"><svg width="17" height="17"><use href="#i-trash"/></svg></button></div>
+      </div>
+      <div class="preview" id="t2">Network: SIOT-Guest
+Password: changes every Monday, ask at the front desk
+Map: <a href="https://maps.google.com" target="_blank" rel="noopener noreferrer">maps.google.com</a></div>
+    </div>
+    </div>
+  </section>
+  </div>
+
+  <div id="view-storage" class="hidden">
+
+    <!-- locked -->
+    <section class="card vault-lock" id="vault-locked">
+      <div class="lock-ic"><svg width="26" height="26"><use href="#i-lock"/></svg></div>
+      <h2>My storage is locked</h2>
+      <span class="why-locked">Locked after 20 minutes without activity</span>
+      <p>Your notes, links, passwords and photos are encrypted on this device before they are saved. Only your storage password can open them. Not even the server admin can read them.</p>
+      <div class="unlock"><input class="input" type="password" placeholder="Storage password" aria-label="Storage password" value="secretsecret"><button class="primary" onclick="unlock()">Unlock</button></div>
+      <small>Forgot it? It cannot be reset. That is what keeps it private.</small>
+    </section>
+
+    <!-- unlocked -->
+    <section id="vault-open">
+      <div class="card vault-head">
+        <div class="vh-top">
+          <div><b>My storage</b><span class="enc"><svg width="13" height="13"><use href="#i-shield"/></svg>Encrypted, only you can see this</span><span class="autolock">Locks itself after 20 minutes without activity</span></div>
+          <button class="btn" onclick="lockVault()"><svg width="15" height="15"><use href="#i-lock"/></svg>Lock</button>
+        </div>
+        <div class="q-bar"><i style="--p:.423"></i></div>
+        <div class="q-foot"><span><b>84.6 MB</b> of 200 MB used</span><span>115.4 MB free</span></div>
+      </div>
+
+      <div class="vault-bar">
+        <div class="kinds" role="tablist" aria-label="Show">
+          <button class="kind on">All</button><button class="kind">Notes</button><button class="kind">Links</button><button class="kind">Passwords</button><button class="kind">Photos</button><button class="kind">Files</button>
+        </div>
+        <div class="add-wrap">
+          <button class="primary small" onclick="this.nextElementSibling.classList.toggle('hidden')"><svg width="16" height="16"><use href="#i-plus"/></svg>Add</button>
+          <div class="add-menu hidden">
+            <button><svg width="16" height="16"><use href="#i-text"/></svg>Note</button>
+            <button><svg width="16" height="16"><use href="#i-link"/></svg>Link</button>
+            <button><svg width="16" height="16"><use href="#i-key"/></svg>Password</button>
+            <button><svg width="16" height="16"><use href="#i-image"/></svg>Photo</button>
+            <button><svg width="16" height="16"><use href="#i-file"/></svg>File</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="vgroup">Passwords</div>
+      <div class="vgrid">
+        <div class="card vcard pw">
+          <div class="vc-top"><span class="vc-ic key"><svg width="18" height="18"><use href="#i-key"/></svg></span><div><b>Office router admin</b><small>admin · 192.168.1.1</small></div></div>
+          <div class="secret"><span class="dots" data-real="Uttara#Gw2026!">••••••••••••</span><button class="mini" aria-label="Show" onclick="reveal(this)"><svg width="16" height="16"><use href="#i-eye"/></svg></button><button class="mini" aria-label="Copy" onclick="copyMini(this)"><svg width="16" height="16"><use href="#i-copy"/></svg></button></div>
+        </div>
+        <div class="card vcard pw">
+          <div class="vc-top"><span class="vc-ic key"><svg width="18" height="18"><use href="#i-key"/></svg></span><div><b>Grafana</b><small>ayman@southerniot.net</small></div></div>
+          <div class="secret"><span class="dots" data-real="g-7Kp!x92Lm">••••••••••••</span><button class="mini" aria-label="Show" onclick="reveal(this)"><svg width="16" height="16"><use href="#i-eye"/></svg></button><button class="mini" aria-label="Copy" onclick="copyMini(this)"><svg width="16" height="16"><use href="#i-copy"/></svg></button></div>
+        </div>
+      </div>
+
+      <div class="vgroup">Notes and links</div>
+      <div class="vgrid">
+        <div class="card vcard">
+          <div class="vc-top"><span class="vc-ic note"><svg width="18" height="18"><use href="#i-text"/></svg></span><div><b>Meeting notes, 28 Oct</b><small>Edited 2 days ago</small></div></div>
+          <p class="snippet">Uttara rollout moves to 12 Nov. Need 6 more gateways from stock. Ask Rahim for the updated BOQ before Friday.</p>
+        </div>
+        <a class="card vcard linkcard" href="https://grafana.southerniot.net/d/uttara" target="_blank" rel="noopener noreferrer">
+          <div class="vc-top"><span class="vc-ic link"><svg width="18" height="18"><use href="#i-link"/></svg></span><div><b>Uttara dashboard</b><small>grafana.southerniot.net</small></div><span class="ext"><svg width="15" height="15"><use href="#i-ext"/></svg></span></div>
+          <p class="snippet">Live readings for the Uttara site gateways.</p>
+        </a>
+      </div>
+
+      <div class="vgroup">Photos</div>
+      <div class="photos">
+        <div class="ph" style="background-image:url(assets/sample-photo.jpg)"></div>
+        <div class="ph" style="background-image:url(assets/sample-photo.jpg);background-position:30% 70%"></div>
+        <div class="ph" style="background-image:url(assets/sample-photo.jpg);background-position:80% 20%"></div>
+        <div class="ph" style="background-image:url(assets/sample-photo.jpg);background-position:10% 10%"></div>
+      </div>
+
+      <div class="vgroup">Files</div>
+      <div class="items">
+        <div class="card item"><div class="row"><div class="ficon pdf"><svg width="20" height="20"><use href="#i-file"/></svg></div>
+          <div><div class="name"><span>Ayman-CV-2026.pdf</span></div><div class="meta">1.2 MB · added Oct 12</div></div>
+          <div class="btns"><button class="btn"><svg width="15" height="15"><use href="#i-down"/></svg>Download</button><button class="del" aria-label="Delete"><svg width="17" height="17"><use href="#i-trash"/></svg></button></div></div></div>
+      </div>
+    </section>
+  </div>
+
+</div>
+</div>
+
+<div style="height:56px"></div>
+<p class="label">Login page</p>
+<div class="loginframe">
+  <div class="lpage">
+    <div class="band"></div>
+    <div class="card lcard">
+      <div class="logo"><img src="assets/mark.png" alt="Southern IoT"></div>
+      <h2>Southern IoT Files</h2>
+      <p>Sign in with your work email</p>
+      <div class="field"><label>Email</label><div class="email"><input value="ayman" aria-label="Email"><span>@southerniot.net</span></div></div>
+      <div class="field"><label>Password</label><input class="input" type="password" value="xxxxxxxxxxxxxxx" aria-label="Password"></div>
+      <button class="primary">Sign in</button>
+      <div class="switch">First time here? <a href="#">Register</a></div>
+    </div>
+  </div>
+</div>
+
+
+<div class="overlay hidden" id="profile" onclick="if(event.target===this) closeProfile()">
+  <aside class="drawer" role="dialog" aria-label="Profile">
+    <div class="dr-head"><div class="av big">AY</div><div><b>ayman</b><span>ayman@southerniot.net</span></div><button class="mini" aria-label="Close" onclick="closeProfile()"><svg width="18" height="18"><use href="#i-x"/></svg></button></div>
+
+    <section class="dr-sec">
+      <h3>Login password</h3>
+      <p>Everyone starts with the shared password. Set your own so nobody else can sign in as you.</p>
+      <div class="field"><label>Current password</label><input class="input" type="password" value="xxxxxxxxxxxxxxx"></div>
+      <div class="field"><label>New password</label><input class="input" type="password" placeholder="At least 10 characters"></div>
+      <div class="field"><label>Repeat new password</label><input class="input" type="password"></div>
+      <button class="primary">Change login password</button>
+    </section>
+
+    <section class="dr-sec">
+      <h3>Storage password</h3>
+      <p>Opens My storage. It never leaves this device, so it cannot be reset. If you forget it, your storage is lost.</p>
+      <div class="field"><label>Current storage password</label><input class="input" type="password"></div>
+      <div class="field"><label>New storage password</label><input class="input" type="password"></div>
+      <button class="btn wide">Change storage password</button>
+    </section>
+
+    <section class="dr-sec muted-sec">
+      <h3>Signed in as the global account?</h3>
+      <p>The shared <b>global@southerniot.net</b> account sees only Global files. It has no My storage, and its password cannot be changed here.</p>
+    </section>
+  </aside>
+</div>
+
+<script>
+  function openProfile(){ document.getElementById('profile').classList.remove('hidden'); }
+  function closeProfile(){ document.getElementById('profile').classList.add('hidden'); }
+
+  document.querySelectorAll('.tt').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.tt').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', String(x === b)); });
+    document.getElementById('view-sharing').classList.toggle('hidden', b.dataset.view !== 'sharing');
+    document.getElementById('view-storage').classList.toggle('hidden', b.dataset.view !== 'storage');
+  }));
+  function lockVault(){ document.getElementById('vault-open').classList.add('hidden'); document.getElementById('vault-locked').classList.remove('hidden'); }
+  function unlock(){ document.getElementById('vault-locked').classList.add('hidden'); document.getElementById('vault-open').classList.remove('hidden'); }
+  function reveal(b){ const d=b.parentElement.querySelector('.dots'); const shown=d.dataset.shown==='1'; d.textContent= shown ? '••••••••••••' : d.dataset.real; d.dataset.shown= shown ? '0':'1'; }
+  function copyMini(b){ b.classList.add('ok'); setTimeout(()=>b.classList.remove('ok'),1200); }
+  document.querySelectorAll('.kind').forEach(k => k.addEventListener('click', () => document.querySelectorAll('.kind').forEach(x => x.classList.toggle('on', x === k))));
+  // start locked, like the real app would after login
+  lockVault();
+
+  document.querySelectorAll('.seg-btn').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.seg-btn').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', String(x === b)); });
+    ['private','global'].forEach(k => document.getElementById('pane-' + k).classList.toggle('hidden', k !== b.dataset.pane));
+  }));
+
+  // mockup only: this preview server sends PDFs as downloads, so re-type the bytes as a PDF
+  // (the real app sends Content-Type: application/pdf and the browser opens it by itself)
+  document.querySelectorAll('.item.openable a[href$=".pdf"]').forEach(a => a.addEventListener('click', async e => {
+    e.preventDefault(); const w = window.open('', '_blank');
+    const buf = await (await fetch(a.href)).arrayBuffer();
+    w.location.href = URL.createObjectURL(new Blob([buf], { type: 'application/pdf' }));
+  }));
+
+  // floating bubbles, generated like v1 (15 of them), slower and softer
+  (function(){ const box=document.querySelector('.bubbles'); for(let i=0;i<15;i++){ const b=document.createElement('span'); const size=30+Math.random()*90;
+    b.style.width=b.style.height=size+'px'; b.style.left=(Math.random()*100)+'%'; b.style.setProperty('--drift',(Math.random()*120-60)+'px');
+    b.style.animationDuration=(26+Math.random()*24)+'s'; b.style.animationDelay=(-Math.random()*40)+'s'; b.style.opacity=(.5+Math.random()*.5).toFixed(2); box.appendChild(b);} })();
+
+  document.querySelectorAll('.item.openable').forEach(c => c.addEventListener('click', e => { if (!e.target.closest('a,button')) c.querySelector('.name a').click(); }));
+  document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === t));
+    ['text','files','folder'].forEach(k => document.getElementById('p-' + k).classList.toggle('hidden', k !== t.dataset.t));
+  }));
+  function tog(b, id){ b.classList.toggle('open'); document.getElementById(id).classList.toggle('hidden'); }
+  function copied(b){ const s=b.querySelector('span'); b.classList.add('copied'); s.textContent='Copied'; setTimeout(()=>{ b.classList.remove('copied'); s.textContent='Copy'; },1500); }
+  let d=1.04; const T=1.8;
+  setInterval(()=>{ const s=80+Math.random()*12; d+=s/1024*0.8; if(d>=T) d=0.06; const p=d/T, l=Math.round((T-d)*1024/s);
+    document.getElementById('bar').style.setProperty('--p', p.toFixed(3));
+    document.getElementById('pct').textContent=Math.round(p*100)+'%';
+    document.getElementById('amt').textContent=d.toFixed(2)+' GB of '+T.toFixed(2)+' GB';
+    document.getElementById('spd').textContent=s.toFixed(1)+' MB/s · '+l+' s left'; },800);
+</script>
+</body>
+</html>
