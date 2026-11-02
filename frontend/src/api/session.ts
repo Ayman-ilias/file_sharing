@@ -29,6 +29,8 @@ export function useSession() {
   const logout = useCallback(async () => {
     try {
       await api.send('POST', '/api/auth/logout')
+    } catch {
+      // the server already forgot the session (expired, password changed): signing out here is enough
     } finally {
       setMe(null)
       setLost(null)

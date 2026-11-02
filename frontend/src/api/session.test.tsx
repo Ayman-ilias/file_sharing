@@ -69,4 +69,14 @@ describe('useSession', () => {
     window.removeEventListener('fs:signed-in', seen)
     expect(ids).toEqual([1])
   })
+
+  it('logout always signs out here, even when the server says the session is already gone', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) =>
+      String(input).endsWith('/logout') ? json(401, { detail: 'not_signed_in' }) : json(200, me))
+    const { result } = renderHook(() => useSession())
+    await waitFor(() => expect(result.current.me).not.toBeNull())
+    await act(() => result.current.logout()) // must not reject
+    expect(result.current.me).toBeNull()
+  })
 })
+
