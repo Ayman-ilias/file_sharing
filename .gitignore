@@ -1,0 +1,22 @@
+# local tooling
+.superpowers/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# frontend
+node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+
+# runtime data and secrets (never commit)
+data/
+*.db
+*.db-wal
+*.db-shm
+.env
+deploy/.env

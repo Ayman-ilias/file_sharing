@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Southern IoT Files</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #303289;
+    --blue: #267dc2;
+    --bg: #f3f5f9;
+    --card: #ffffff;
+    --line: #e6e9ef;
+    --line-2: #f0f2f6;
+    --ink: #111827;
+    --ink-2: #374151;
+    --muted: #6b7280;
+    --faint: #9ca3af;
+    --soft: #f6f7fb;
+    --blue-soft: #e9f2fb;
+    --red: #dc2626;
+    --radius: 16px;
+    --shadow: 0 1px 2px rgba(17,24,39,.04), 0 8px 24px -12px rgba(17,24,39,.10);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { overflow-x: clip; }
+  body { font-family: Inter, system-ui, -apple-system, sans-serif; color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased; font-size: 14.5px; line-height: 1.5; }
+  button, input, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 0; background: none; }
+  :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  svg { display: block; flex-shrink: 0; }
+
+  /* brand band behind the header (v1 had the full-page purple gradient) */
+  .band { position: absolute; inset: 0 0 auto 0; height: 340px; background: linear-gradient(160deg, #303289 0%, #2a4fa6 55%, #267dc2 100%); z-index: -1; }
+  .band::after { content: ""; position: absolute; inset: auto 0 0 0; height: 120px; background: linear-gradient(to bottom, rgba(243,245,249,0), var(--bg)); }
+
+  .wrap { max-width: 880px; margin: 0 auto; padding: 0 20px 80px; position: relative; }
+
+  /* top: account (new) */
+  .account { display: flex; justify-content: flex-end; align-items: center; gap: 12px; padding: 18px 0 0; color: rgba(255,255,255,.85); font-size: 13.5px; }
+  .account .av { width: 30px; height: 30px; border-radius: 50%; background: rgba(255,255,255,.18); color: #fff; display: grid; place-items: center; font-size: 11.5px; font-weight: 600; }
+  .account a { color: #fff; text-decoration: none; font-weight: 500; opacity: .85; }
+  .account a:hover { opacity: 1; }
+
+  /* 1 · header (same as v1: logo, title, subtitle) */
+  header { text-align: center; padding: 8px 0 34px; color: #fff; }
+  .logo { width: 76px; height: 76px; margin: 0 auto 16px; background: #fff; border-radius: 18px; display: grid; place-items: center; box-shadow: 0 10px 30px -10px rgba(0,0,0,.35); }
+  .logo img { width: 48px; height: 48px; }
+  h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+  .tag { opacity: .8; margin-top: 4px; font-size: 15px; }
+
+  /* 2 · notice (same place as v1's auto-delete banner, quieter) */
+  .notice { display: flex; align-items: center; gap: 10px; padding: 12px 16px; margin-bottom: 16px; background: rgba(255,255,255,.92); border: 1px solid rgba(255,255,255,.6); border-radius: 12px; color: var(--ink-2); font-size: 13.5px; box-shadow: var(--shadow); backdrop-filter: blur(6px); }
+  .notice svg { color: var(--blue); }
+
+  /* 3 · upload card with tabs (same as v1) */
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .upload { padding: 8px 24px 24px; }
+  .tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin: 0 -24px 20px; padding: 0 24px; }
+  .tab { display: inline-flex; align-items: center; gap: 8px; height: 52px; padding: 0 14px; color: var(--muted); font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab:hover { color: var(--ink); }
+  .tab.on { color: var(--navy); border-bottom-color: var(--navy); font-weight: 600; }
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 13px; font-weight: 600; color: var(--ink-2); margin-bottom: 7px; }
+  .input, textarea { width: 100%; border: 1px solid var(--line); border-radius: 10px; background: var(--card); padding: 11px 14px; outline: 0; }
+  .input:focus, textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+  textarea { min-height: 140px; resize: vertical; line-height: 1.6; }
+  .count { text-align: right; font-size: 12px; color: var(--faint); margin-top: 6px; }
+
+  /* send to (new) */
+  .to { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px; min-height: 46px; border: 1px solid var(--line); border-radius: 10px; }
+  .to:focus-within { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-soft); }
+  .chip { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 6px 0 12px; border-radius: 8px; background: var(--soft); border: 1px solid var(--line); font-weight: 500; }
+  .chip.all { background: var(--blue-soft); border-color: #cfe2f4; color: #1d5f96; }
+  .chip button { width: 20px; height: 20px; border-radius: 6px; display: grid; place-items: center; color: var(--faint); }
+  .chip button:hover { background: var(--line); color: var(--ink); }
+  .to input { flex: 1; min-width: 140px; border: 0; outline: 0; height: 32px; padding: 0 6px; background: transparent; }
+  .to input::placeholder { color: var(--faint); }
+
+  .drop { border: 1.5px dashed #cdd3de; border-radius: 12px; padding: 34px 20px; text-align: center; color: var(--muted); background: var(--soft); }
+  .drop .ic { width: 44px; height: 44px; margin: 0 auto 10px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); display: grid; place-items: center; color: var(--navy); }
+  .drop b { color: var(--ink); font-weight: 600; }
+  .drop small { display: block; margin-top: 4px; color: var(--faint); font-size: 12.5px; }
+
+  /* upload progress (new) */
+  .queue { margin-top: 14px; display: grid; gap: 10px; }
+  .q { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; }
+  .q-top { display: flex; align-items: center; gap: 10px; }
+  .q-top b { font-weight: 500; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .q-top .pct { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .q-top .x { width: 26px; height: 26px; border-radius: 7px; display: grid; place-items: center; color: var(--faint); }
+  .q-top .x:hover { background: var(--soft); color: var(--ink); }
+  .track { height: 5px; border-radius: 99px; background: var(--line-2); margin: 10px 0 7px; overflow: hidden; }
+  .track i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--navy), var(--blue)); transform-origin: left; transform: scaleX(var(--p)); transition: transform .5s ease; }
+  .q-sub { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .q.done .pct { color: #15803d; }
+  .q.done .track i { background: #16a34a; }
+
+  .actions { display: flex; align-items: center; justify-content: space-between; margin-top: 20px; gap: 12px; }
+  .actions small { color: var(--faint); font-size: 12.5px; }
+  .primary { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 22px; border-radius: 11px; background: var(--navy); color: #fff; font-weight: 600; box-shadow: 0 6px 16px -8px rgba(48,50,137,.7); }
+  .primary:hover { background: #26286f; }
+
+  /* 4 · date groups (same as v1, lighter) */
+  .date { display: flex; align-items: center; gap: 12px; margin: 36px 4px 12px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .date::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  /* 5 · item cards (same as v1: one card per item) */
+  .items { display: grid; gap: 10px; }
+  .item { padding: 14px 16px; }
+  .row { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 14px; align-items: center; }
+  .ficon { width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center; background: var(--soft); color: var(--ink-2); }
+  .ficon.pdf { background: #fdecec; color: #c62828; }
+  .ficon.img { background: #e8f6ef; color: #15803d; }
+  .ficon.dir { background: var(--blue-soft); color: var(--blue); }
+  .ficon.txt { background: #eef0f8; color: var(--navy); }
+  .name { display: flex; align-items: center; gap: 6px; font-weight: 600; min-width: 0; }
+  .name span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .toggle { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; color: var(--faint); margin-left: -4px; transition: transform .2s; }
+  .toggle:hover { background: var(--soft); color: var(--ink); }
+  .toggle.open { transform: rotate(90deg); }
+  .meta { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .meta b { color: var(--ink-2); font-weight: 500; }
+  .everyone { color: #1d5f96; font-weight: 500; }
+  .btns { display: flex; align-items: center; gap: 6px; }
+  .btn { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); font-weight: 500; color: var(--ink); }
+  .btn:hover { border-color: #cfd5df; background: var(--soft); }
+  .btn.copied { color: #15803d; border-color: #bfe8cf; background: #effaf3; }
+  .del { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; color: var(--faint); }
+  .del:hover { background: #fdecec; color: var(--red); }
+
+  .preview { margin: 12px 0 2px 56px; padding: 14px 16px; background: var(--soft); border-radius: 12px; font-size: 13.5px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink-2); }
+  .preview a { color: var(--blue); text-decoration: none; font-weight: 500; }
+  .preview a:hover { text-decoration: underline; }
+  .inside { margin: 12px 0 2px 56px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .inside span { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 8px; background: var(--soft); color: var(--ink-2); font-size: 13px; }
+
+
+  /* background animation (v1 had floating bubbles; same idea, brand colours, slower) */
+  .bubbles { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+  .bubbles span { position: absolute; bottom: -140px; border-radius: 50%; background: radial-gradient(circle at 32% 30%, rgba(255,255,255,.55), rgba(38,125,194,.16) 60%, rgba(48,50,137,.10)); animation: rise linear infinite; will-change: transform; }
+  @keyframes rise { from { transform: translate(0, 0) scale(.9); } to { transform: translate(var(--drift), -125vh) scale(1.1); } }
+  @media (prefers-reduced-motion: reduce) { .bubbles { display: none; } }
+  .wrap, .loginframe, .label { position: relative; z-index: 1; }
+
+  /* photo: real thumbnail + bigger preview on hover */
+  .item { position: relative; }
+  .thumb { width: 42px; height: 42px; border-radius: 11px; object-fit: cover; display: block; box-shadow: 0 0 0 1px var(--line); }
+  .peek { position: absolute; left: 60px; bottom: calc(100% - 6px); z-index: 20; width: 340px; padding: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 24px 48px -16px rgba(17,24,39,.35); opacity: 0; transform: translateY(8px) scale(.98); transform-origin: bottom left; transition: opacity .18s ease, transform .18s ease; pointer-events: none; }
+  .peek img { width: 100%; height: 220px; object-fit: cover; border-radius: 10px; display: block; }
+  .peek div { display: flex; justify-content: space-between; padding: 8px 4px 2px; font-size: 12.5px; color: var(--muted); }
+  .peek b { color: var(--ink); font-weight: 600; }
+  .item.photo:hover .peek, .item.photo:focus-within .peek { opacity: 1; transform: none; }
+  .item.photo .row { cursor: zoom-in; }
+
+
+  /* full-page animated gradient (replaces the top band) */
+  body { background: #1b1f66; }
+  .bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; background: linear-gradient(135deg, #1a1d5e 0%, #303289 38%, #2a5fb0 70%, #267dc2 100%); }
+  .bg i { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .55; will-change: transform; }
+  .bg .b1 { width: 60vw; height: 60vw; left: -15vw; top: -20vw; background: #4a4fd1; animation: m1 26s ease-in-out infinite alternate; }
+  .bg .b2 { width: 55vw; height: 55vw; right: -18vw; top: 10vh; background: #2a9be0; animation: m2 32s ease-in-out infinite alternate; }
+  .bg .b3 { width: 50vw; height: 50vw; left: 20vw; bottom: -30vw; background: #1f2b8f; animation: m3 38s ease-in-out infinite alternate; }
+  .bg .b4 { width: 35vw; height: 35vw; right: 15vw; bottom: -10vw; background: #3bb3e6; opacity: .35; animation: m1 44s ease-in-out infinite alternate-reverse; }
+  @keyframes m1 { to { transform: translate(18vw, 14vh) scale(1.15); } }
+  @keyframes m2 { to { transform: translate(-20vw, 22vh) scale(.9); } }
+  @keyframes m3 { to { transform: translate(-12vw, -18vh) scale(1.2); } }
+  @media (prefers-reduced-motion: reduce) { .bg i { animation: none; } }
+  .band { display: none; }
+  .bubbles { z-index: 0; }
+  .bubbles span { background: radial-gradient(circle at 32% 30%, rgba(255,255,255,.35), rgba(255,255,255,.08) 60%, rgba(255,255,255,.02)); border: 1px solid rgba(255,255,255,.12); }
+  .date { color: rgba(255,255,255,.78); }
+  .date::after { background: rgba(255,255,255,.18); }
+  .label { color: rgba(255,255,255,.75); }
+  .lpage { background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12); backdrop-filter: blur(4px); }
+  .item, .upload, .lcard { box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 18px 40px -20px rgba(8,12,48,.55); border-color: rgba(255,255,255,.6); }
+
+
+  /* PDF: the whole card opens the file in a new tab */
+  .item.openable { cursor: pointer; transition: transform .15s ease, box-shadow .15s ease; }
+  .item.openable:hover { transform: translateY(-1px); box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 22px 44px -18px rgba(8,12,48,.6); }
+  .item.openable .name a { color: inherit; text-decoration: none; }
+  .item.openable .name a::after { content: ""; position: absolute; inset: 0; border-radius: var(--radius); }
+  .item.openable .btns { position: relative; z-index: 1; }
+  .opens { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; font-size: 12px; font-weight: 500; color: var(--blue); opacity: 0; transition: opacity .15s ease; }
+  .item.openable:hover .opens, .item.openable:focus-within .opens { opacity: 1; }
+
+
+  .preview a::after { content: "\2197"; font-size: 11px; margin-left: 3px; opacity: 0; transition: opacity .15s; }
+  .preview a:hover::after { opacity: .8; }
+
+
+  /* private / global switch */
+  .switch-wrap { display: flex; justify-content: center; margin: 40px 0 6px; }
+  .seg { display: inline-flex; padding: 5px; gap: 4px; border-radius: 14px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22); backdrop-filter: blur(8px); }
+  .seg-btn { display: inline-flex; align-items: center; gap: 8px; height: 42px; padding: 0 22px; border-radius: 10px; color: rgba(255,255,255,.85); font-weight: 600; }
+  .seg-btn:hover { color: #fff; background: rgba(255,255,255,.08); }
+  .seg-btn.on { background: #fff; color: var(--navy); box-shadow: 0 6px 18px -8px rgba(8,12,48,.6); }
+  .seg-btn .cnt { min-width: 22px; height: 20px; padding: 0 6px; border-radius: 99px; display: grid; place-items: center; font-size: 11.5px; background: rgba(255,255,255,.2); }
+  .seg-btn.on .cnt { background: var(--blue-soft); color: var(--navy); }
+  .pane-note { text-align: center; color: rgba(255,255,255,.72); font-size: 13px; margin: 8px 0 0; }
+  .pane .date:first-of-type { margin-top: 18px; }
+
+
+  /* top-level tabs: Sharing | My storage */
+  .top-tabs { display: flex; justify-content: center; gap: 4px; width: max-content; margin: -10px auto 26px; padding: 5px; border-radius: 14px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22); backdrop-filter: blur(8px); }
+  .tt { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 26px; border-radius: 10px; color: rgba(255,255,255,.85); font-weight: 600; font-size: 15px; }
+  .tt:hover { color: #fff; background: rgba(255,255,255,.08); }
+  .tt.on { background: #fff; color: var(--navy); box-shadow: 0 6px 18px -8px rgba(8,12,48,.6); }
+
+  /* vault: locked */
+  .vault-lock { max-width: 520px; margin: 0 auto; padding: 36px 32px; text-align: center; }
+  .lock-ic { width: 60px; height: 60px; margin: 0 auto 14px; border-radius: 18px; display: grid; place-items: center; background: #eef0f8; color: var(--navy); }
+  .vault-lock h2 { font-size: 20px; letter-spacing: -0.02em; }
+  .vault-lock p { color: var(--muted); margin: 6px 0 20px; line-height: 1.6; }
+  .unlock { display: flex; gap: 8px; }
+  .unlock .input { flex: 1; }
+  .vault-lock small { display: block; margin-top: 12px; color: var(--faint); font-size: 12.5px; }
+
+  /* vault: open */
+  .vault-head { padding: 18px 20px; }
+  .vh-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .vh-top b { display: block; font-size: 16px; }
+  .enc { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: #15803d; font-weight: 500; }
+  .q-bar { height: 8px; border-radius: 99px; background: var(--line-2); margin: 14px 0 8px; overflow: hidden; }
+  .q-bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--navy), var(--blue)); transform-origin: left; transform: scaleX(var(--p)); }
+  .q-foot { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
+  .q-foot b { color: var(--ink); }
+  .vault-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 22px 0 6px; }
+  .kinds { display: flex; gap: 6px; flex-wrap: wrap; }
+  .kind { height: 34px; padding: 0 14px; border-radius: 99px; color: rgba(255,255,255,.85); font-weight: 500; background: rgba(255,255,255,.1); }
+  .kind:hover { background: rgba(255,255,255,.18); color: #fff; }
+  .kind.on { background: #fff; color: var(--navy); }
+  .primary.small { height: 38px; padding: 0 16px; box-shadow: none; background: #fff; color: var(--navy); }
+  .primary.small:hover { background: #eef2ff; }
+  .add-wrap { position: relative; }
+  .add-menu { position: absolute; right: 0; top: 46px; z-index: 30; width: 180px; padding: 6px; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 24px 48px -16px rgba(17,24,39,.35); }
+  .add-menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border-radius: 8px; font-weight: 500; color: var(--ink); }
+  .add-menu button:hover { background: var(--soft); }
+  .vgroup { margin: 22px 4px 10px; font-size: 13px; font-weight: 600; color: rgba(255,255,255,.78); }
+  .vgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .vcard { padding: 16px; display: block; color: inherit; text-decoration: none; }
+  .vc-top { display: flex; align-items: center; gap: 12px; }
+  .vc-top b { display: block; font-weight: 600; }
+  .vc-top small { color: var(--muted); font-size: 12.5px; }
+  .vc-ic { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; }
+  .vc-ic.key { background: #fff4e5; color: #b45309; } .vc-ic.note { background: #eef0f8; color: var(--navy); } .vc-ic.link { background: var(--blue-soft); color: var(--blue); }
+  .secret { display: flex; align-items: center; gap: 4px; margin-top: 12px; padding: 6px 6px 6px 12px; background: var(--soft); border-radius: 10px; }
+  .secret .dots { flex: 1; font-family: ui-monospace, Menlo, monospace; letter-spacing: .08em; color: var(--ink-2); }
+  .mini { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; color: var(--muted); }
+  .mini:hover { background: #fff; color: var(--ink); }
+  .mini.ok { color: #15803d; }
+  .snippet { margin-top: 10px; color: var(--ink-2); font-size: 13.5px; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .linkcard .ext { margin-left: auto; color: var(--faint); }
+  .linkcard:hover { box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 22px 44px -18px rgba(8,12,48,.6); }
+  .linkcard:hover .ext { color: var(--blue); }
+  .photos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .ph { aspect-ratio: 1; border-radius: 14px; background-size: cover; background-position: center; box-shadow: 0 18px 40px -20px rgba(8,12,48,.55); border: 2px solid #fff; cursor: zoom-in; transition: transform .15s ease; }
+  .ph:hover { transform: scale(1.02); }
+  @media (max-width: 640px) { .vgrid { grid-template-columns: minmax(0, 1fr); } .photos { grid-template-columns: repeat(2, minmax(0, 1fr)); } .vault-bar { flex-direction: column; align-items: stretch; } }
+
+
+  /* profile + nudges */
+  .acct-btn { display: inline-flex; align-items: center; gap: 12px; color: inherit; padding: 4px 4px 4px 10px; border-radius: 99px; }
+  .acct-btn:hover { background: rgba(255,255,255,.12); }
+  .nudge { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding: 10px 10px 10px 14px; border-radius: 12px; background: #fff7e6; border: 1px solid #fde4b0; color: #7c4a03; font-size: 13.5px; }
+  .nudge span { flex: 1; }
+  .nudge button { height: 32px; padding: 0 12px; border-radius: 8px; background: #7c4a03; color: #fff; font-weight: 600; font-size: 13px; white-space: nowrap; }
+  .autolock { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .why-locked { display: inline-block; margin-top: 6px; padding: 3px 10px; border-radius: 99px; background: var(--soft); color: var(--muted); font-size: 12px; }
+  .overlay { position: fixed; inset: 0; z-index: 50; background: rgba(10,14,40,.45); backdrop-filter: blur(3px); display: flex; justify-content: flex-end; }
+  .drawer { width: min(420px, 100%); height: 100%; overflow: auto; background: #fff; padding: 24px; box-shadow: -20px 0 60px -20px rgba(0,0,0,.4); }
+  .dr-head { display: flex; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+  .dr-head b { display: block; font-size: 16px; }
+  .dr-head span { color: var(--muted); font-size: 13px; }
+  .dr-head .mini { margin-left: auto; }
+  .av.big { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: var(--navy); color: #fff; font-weight: 600; }
+  .dr-sec { padding: 20px 0; border-bottom: 1px solid var(--line); }
+  .dr-sec h3 { font-size: 15px; margin-bottom: 4px; }
+  .dr-sec p { color: var(--muted); font-size: 13px; margin-bottom: 14px; line-height: 1.55; }
+  .dr-sec .primary { width: 100%; justify-content: center; }
+  .btn.wide { width: 100%; justify-content: center; height: 42px; }
+  .muted-sec { border-bottom: 0; } .muted-sec p { margin: 0; }
+
+  .hidden { display: none; }
+
+  /* login preview (separate page, same style) */
+  .label { max-width: 880px; margin: 0 auto 12px; padding: 0 20px; font-size: 13px; color: var(--muted); font-weight: 600; }
+  .loginframe { max-width: 880px; margin: 0 auto 60px; padding: 0 20px; }
+  .lpage { position: relative; overflow: hidden; border-radius: 20px; background: var(--bg); padding: 60px 20px; box-shadow: var(--shadow); }
+  .lpage .band { z-index: 0; height: 260px; }
+  .lcard { position: relative; max-width: 380px; margin: 0 auto; padding: 32px; text-align: center; }
+  .lcard .logo { box-shadow: none; border: 1px solid var(--line); width: 64px; height: 64px; }
+  .lcard .logo img { width: 40px; height: 40px; }
+  .lcard h2 { font-size: 21px; letter-spacing: -0.02em; }
+  .lcard p { color: var(--muted); margin: 4px 0 22px; }
+  .lcard .field { text-align: left; }
+  .email { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .email input { flex: 1; min-width: 0; border: 0; outline: 0; padding: 11px 14px; }
+  .email span { padding: 0 14px; color: var(--muted); }
+  .lcard .primary { width: 100%; justify-content: center; margin-top: 6px; }
+  .lcard .switch { margin-top: 16px; color: var(--muted); font-size: 13.5px; }
+  .lcard .switch a { color: var(--navy); font-weight: 600; text-decoration: none; }
+
+  @media (max-width: 640px) {
+    header { padding-bottom: 26px; } h1 { font-size: 24px; }
+    .upload { padding: 4px 16px 18px; } .tabs { margin: 0 -16px 18px; padding: 0 10px; } .tab { padding: 0 10px; }
+    .row { grid-template-columns: 38px minmax(0, 1fr); } .btns { grid-column: 1 / -1; justify-content: flex-end; }
+    .preview, .inside { margin-left: 0; }
+    .actions small { display: none; } .primary { width: 100%; justify-content: center; }
+  }
+
+  /* ---------- states gallery (new 2026-11-02) ---------- */
+  .gal { max-width: 1120px; margin: 0 auto; padding: 32px 20px 80px; position: relative; z-index: 1; }
+  .gal > h1 { color: #fff; font-size: 26px; letter-spacing: -0.02em; }
+  .gal > p.lead { color: rgba(255,255,255,.75); margin: 6px 0 26px; max-width: 80ch; }
+  .gsec { margin: 34px 0 10px; color: #fff; font-size: 17px; font-weight: 600; }
+  .ggrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+  .ggrid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .fr > .cap { color: rgba(255,255,255,.72); font-size: 12.5px; margin: 0 0 8px 2px; }
+  .fr > .cap b { color: #fff; font-weight: 600; }
+  .pad { padding: 18px 20px; }
+  .vtools { margin-left: auto; position: relative; }
+  .menu { position: absolute; right: 0; top: 38px; z-index: 20; width: 170px; padding: 6px; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 24px 48px -16px rgba(17,24,39,.35); }
+  .menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border-radius: 8px; font-weight: 500; color: var(--ink); }
+  .menu button:hover { background: var(--soft); }
+  .menu .sep { height: 1px; background: var(--line); margin: 4px 6px; }
+  .menu .danger { color: var(--red); }
+  .confirm-del { height: 34px; padding: 0 12px; border-radius: 9px; background: var(--red); color: #fff; font-weight: 600; font-size: 13px; }
+  .vcard .ttl-link { color: inherit; text-decoration: none; }
+  .vcard .ttl-link:hover b { color: var(--blue); }
+  .phw { position: relative; }
+  .phw .ph-act { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 6px; }
+  .phw .ph-act button { width: 32px; height: 32px; border-radius: 9px; background: rgba(255,255,255,.94); display: grid; place-items: center; color: var(--ink-2); }
+  .phw .ph-act button.d:hover { color: var(--red); }
+  .modal-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .modal-h h3 { font-size: 16px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .pw-in { display: flex; gap: 6px; align-items: center; }
+  .pw-in .input { flex: 1; }
+  .actions-r { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+  .err-msg { color: var(--red); font-size: 12.5px; margin-top: 6px; display: flex; gap: 6px; align-items: center; }
+  .ok-msg { color: #15803d; font-size: 13px; display: flex; gap: 6px; align-items: center; padding: 10px 12px; background: #effaf3; border: 1px solid #bfe8cf; border-radius: 10px; }
+  .input.bad { border-color: #f1a7a7; box-shadow: 0 0 0 3px #fdecec; }
+  .tick { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--ink-2); padding: 12px; background: #fff7e6; border: 1px solid #fde4b0; border-radius: 10px; }
+  .tick input { margin-top: 2px; width: 16px; height: 16px; }
+  .primary[disabled] { opacity: .5; cursor: not-allowed; box-shadow: none; }
+  .erase-box { border: 1px solid #f1a7a7; background: #fff5f5; border-radius: 12px; padding: 14px; }
+  .erase-box b { color: var(--red); }
+  .btn.red { background: var(--red); border-color: var(--red); color: #fff; }
+  .toast { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; background: #111827; color: #fff; font-size: 13.5px; box-shadow: 0 20px 40px -18px rgba(0,0,0,.6); }
+  .toast button { margin-left: auto; color: #93c5fd; font-weight: 600; }
+  .q-bar.full i { background: var(--red); }
+  .full-tag { color: var(--red); font-weight: 600; }
+  .dd { margin-top: 6px; padding: 6px; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 24px 48px -16px rgba(17,24,39,.3); }
+  .dd .o { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; }
+  .dd .o.hl { background: var(--soft); }
+  .dd .o small { margin-left: auto; color: var(--muted); font-size: 12px; }
+  .dd .o .gl { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--blue-soft); color: var(--blue); }
+  .dd .o .ini { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: #eef0f8; color: var(--navy); font-size: 10.5px; font-weight: 600; }
+  .dd .none { padding: 10px; color: var(--muted); font-size: 13px; }
+  .chip.global { background: var(--blue-soft); border-color: #cfe2f4; color: #1d5f96; }
+  .hintline { color: var(--muted); font-size: 12.5px; margin-top: 6px; }
+  .q.failed .pct { color: var(--red); } .q.failed .track i { background: var(--red); }
+  .q.paused .track i { background: #9ca3af; }
+  .q .act { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); font-weight: 500; font-size: 12.5px; }
+  .skel { height: 12px; border-radius: 6px; background: linear-gradient(90deg, #eef0f4, #f6f7fa, #eef0f4); background-size: 200% 100%; animation: sk 1.4s ease-in-out infinite; }
+  @keyframes sk { to { background-position: -200% 0; } }
+  @media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
+  .empty { text-align: center; padding: 34px 20px; }
+  .empty .ic { width: 52px; height: 52px; border-radius: 16px; margin: 0 auto 12px; display: grid; place-items: center; background: #eef0f8; color: var(--navy); }
+  .empty h4 { font-size: 15px; } .empty p { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .errcard { display: flex; gap: 12px; align-items: center; }
+  .errcard .ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: #fdecec; color: var(--red); flex-shrink: 0; }
+  .offline { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; background: #fff7e6; border: 1px solid #fde4b0; color: #7c4a03; font-size: 13px; }
+  .more-rc { color: var(--blue); font-weight: 500; cursor: help; border-bottom: 1px dotted var(--blue); }
+  .soon { color: #b45309; font-weight: 500; }
+  .preview.clamp { max-height: 7.2em; overflow: hidden; position: relative; }
+  .preview.clamp::after { content: ""; position: absolute; inset: auto 0 0 0; height: 2.4em; background: linear-gradient(to bottom, rgba(246,247,251,0), var(--soft)); }
+  .showall { margin: 6px 0 0 56px; color: var(--blue); font-weight: 500; font-size: 13px; }
+  .inside a { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 8px; background: var(--soft); color: var(--ink-2); font-size: 13px; text-decoration: none; }
+  .inside a:hover { color: var(--blue); }
+  .tt.solo { pointer-events: none; }
+  .lightbox { background: rgba(10,14,40,.92); border-radius: 18px; padding: 14px; color: #fff; }
+  .lightbox img { width: 100%; height: 260px; object-fit: cover; border-radius: 12px; display: block; }
+  .lb-bar { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; }
+  .lb-bar span { margin-right: auto; } .lb-bar button { height: 34px; padding: 0 12px; border-radius: 9px; background: rgba(255,255,255,.14); color: #fff; font-weight: 500; display: inline-flex; gap: 6px; align-items: center; }
+  @media (max-width: 860px) { .ggrid, .ggrid.three { grid-template-columns: minmax(0, 1fr); } }
+
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 6h14M5 11h14M5 16h9"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20V9m0 0-4 4m4-4 4 4M5 4h14"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-ext" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 5h5v5M19 5l-8 8M18 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.5 3 14.5 0 18M12 3c-3 3.5-3 14.5 0 18"/></symbol>
+  <symbol id="i-video" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v6c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M15 8l2 2"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-x2" viewBox="0 0 24 24"></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="m14 6 4 4"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20L12 3z"/><path d="M12 10v4M12 17v.5"/></symbol>
+  <symbol id="i-retry" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v4h4"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M2 2l20 20M8.5 16.5a5 5 0 0 1 7 0M5 12.5a10 10 0 0 1 5-2.6M19 12.5a10 10 0 0 0-2.4-1.8M12 20h.01"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></symbol>
+</svg>
+
+<div class="bg" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i><i class="b4"></i></div>
+<div class="gal">
+  <h1>Southern IoT Files: missing states and actions</h1>
+  <p class="lead">Additions to the approved mockup, in the same style. Every gap the corner-case review found has a screen here. The approved screens in mockup.html stay as they are.</p>
+
+  <!-- ===== My storage: actions on every item ===== -->
+  <div class="gsec">1 · My storage: every item can be edited and deleted</div>
+  <div class="ggrid">
+    <div class="fr"><p class="cap"><b>⋯ menu on every card</b> (passwords, notes, links, photos, files): Edit, Copy and Delete</p>
+      <div class="card vcard pw">
+        <div class="vc-top"><span class="vc-ic key"><svg width="18" height="18"><use href="#i-key"/></svg></span><div><b>Office router admin</b><small>admin · 192.168.1.1</small></div>
+          <div class="vtools"><button class="mini" aria-label="More"><svg width="18" height="18"><use href="#i-more"/></svg></button>
+            <div class="menu"><button><svg width="16" height="16"><use href="#i-edit"/></svg>Edit</button><button><svg width="16" height="16"><use href="#i-copy"/></svg>Copy password</button><button><svg width="16" height="16"><use href="#i-copy"/></svg>Copy username</button><div class="sep"></div><button class="danger"><svg width="16" height="16"><use href="#i-trash"/></svg>Delete</button></div>
+          </div></div>
+        <div class="secret"><span class="dots">••••••••••••</span><button class="mini"><svg width="16" height="16"><use href="#i-eye"/></svg></button><button class="mini"><svg width="16" height="16"><use href="#i-copy"/></svg></button></div>
+        <div style="height:120px"></div>
+      </div>
+    </div>
+    <div class="fr"><p class="cap"><b>Delete asks inline:</b> the menu's Delete turns into a red "Delete?" button for 4 s, and a second click deletes</p>
+      <div class="card vcard">
+        <div class="vc-top"><span class="vc-ic note"><svg width="18" height="18"><use href="#i-text"/></svg></span><div><b>Meeting notes, 28 Oct</b><small>Edited 2 days ago</small></div>
+          <div class="vtools"><button class="confirm-del">Delete?</button></div></div>
+        <p class="snippet">Uttara rollout moves to 12 Nov. Need 6 more gateways from stock. Ask Rahim for the updated BOQ before Friday.</p>
+      </div>
+      <p class="cap" style="margin-top:16px"><b>Link card:</b> the title opens the link in a new tab, and ⋯ edits or deletes it (no more whole-card link)</p>
+      <div class="card vcard">
+        <div class="vc-top"><span class="vc-ic link"><svg width="18" height="18"><use href="#i-link"/></svg></span><div><a class="ttl-link" href="#"><b>Uttara dashboard ↗</b></a><small>grafana.southerniot.net</small></div>
+          <div class="vtools"><button class="mini" aria-label="More"><svg width="18" height="18"><use href="#i-more"/></svg></button></div></div>
+        <p class="snippet">Live readings for the Uttara site gateways.</p>
+      </div>
+    </div>
+    <div class="fr"><p class="cap"><b>Photos:</b> hover (or tap on a phone) shows Download and Delete; a click opens full size</p>
+      <div class="photos" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+        <div class="phw"><div class="ph" style="background-image:url(assets/sample-photo.jpg)"></div><div class="ph-act"><button aria-label="Download"><svg width="16" height="16"><use href="#i-down"/></svg></button><button class="d" aria-label="Delete"><svg width="16" height="16"><use href="#i-trash"/></svg></button></div></div>
+        <div class="ph" style="background-image:url(assets/sample-photo.jpg);background-position:30% 70%"></div>
+        <div class="ph" style="background-image:url(assets/sample-photo.jpg);background-position:80% 20%"></div>
+      </div>
+    </div>
+    <div class="fr"><p class="cap"><b>Files:</b> Download, plus ⋯ with Rename and Delete</p>
+      <div class="card item"><div class="row"><div class="ficon pdf"><svg width="20" height="20"><use href="#i-file"/></svg></div>
+        <div><div class="name"><span>Ayman-CV-2026.pdf</span></div><div class="meta">1.2 MB · added Oct 12</div></div>
+        <div class="btns"><button class="btn"><svg width="15" height="15"><use href="#i-down"/></svg>Download</button><button class="mini" aria-label="More"><svg width="18" height="18"><use href="#i-more"/></svg></button></div></div></div>
+    </div>
+  </div>
+
+  <!-- ===== My storage: add / edit forms ===== -->
+  <div class="gsec">2 · My storage: Add and Edit forms (one per kind)</div>
+  <div class="ggrid three">
+    <div class="fr"><p class="cap"><b>Password</b> (title, username, website, password, note)</p>
+      <div class="card pad">
+        <div class="modal-h"><h3>New password</h3><button class="mini"><svg width="16" height="16"><use href="#i-x"/></svg></button></div>
+        <div class="field"><label>Title</label><input class="input" value="Office router admin"></div>
+        <div class="row2"><div class="field"><label>Username</label><input class="input" value="admin"></div><div class="field"><label>Website or IP</label><input class="input" value="192.168.1.1"></div></div>
+        <div class="field"><label>Password</label><div class="pw-in"><input class="input" type="password" value="xxxxxxxxxxxx"><button class="mini" title="Show"><svg width="16" height="16"><use href="#i-eye"/></svg></button><button class="btn" style="height:40px">Generate</button></div></div>
+        <div class="field"><label>Note <span style="font-weight:400;color:var(--faint)">(optional)</span></label><input class="input" placeholder="Anything to remember"></div>
+        <div class="actions-r"><button class="btn">Cancel</button><button class="primary small" style="background:var(--navy);color:#fff">Save</button></div>
+      </div>
+    </div>
+    <div class="fr"><p class="cap"><b>Note</b>, with an error when it's empty</p>
+      <div class="card pad">
+        <div class="modal-h"><h3>New note</h3><button class="mini"><svg width="16" height="16"><use href="#i-x"/></svg></button></div>
+        <div class="field"><label>Title <span style="font-weight:400;color:var(--faint)">(optional)</span></label><input class="input" placeholder="First line is used if empty"></div>
+        <div class="field"><label>Note</label><textarea class="bad" style="min-height:110px;border-color:#f1a7a7"></textarea><div class="err-msg"><svg width="14" height="14"><use href="#i-alert"/></svg>Write something before saving.</div></div>
+        <div class="actions-r"><button class="btn">Cancel</button><button class="primary small" style="background:var(--navy);color:#fff">Save</button></div>
+      </div>
+    </div>
+    <div class="fr"><p class="cap"><b>Link</b>, with a check that it's a real web address</p>
+      <div class="card pad">
+        <div class="modal-h"><h3>Edit link</h3><button class="mini"><svg width="16" height="16"><use href="#i-x"/></svg></button></div>
+        <div class="field"><label>Title</label><input class="input" value="Uttara dashboard"></div>
+        <div class="field"><label>Address</label><input class="input bad" value="grafana southerniot"><div class="err-msg"><svg width="14" height="14"><use href="#i-alert"/></svg>That isn't a web address. Example: grafana.southerniot.net</div></div>
+        <div class="field"><label>Note <span style="font-weight:400;color:var(--faint)">(optional)</span></label><input class="input" value="Live readings for the Uttara site gateways."></div>
+        <div class="actions-r"><button class="btn">Cancel</button><button class="primary small" style="background:var(--navy);color:#fff">Save</button></div>
+      </div>
+    </div>
+  </div>
+  <p class="cap" style="color:rgba(255,255,255,.72);font-size:12.5px;margin-top:8px">Photo and File: Add opens the file picker. Progress shows in the same upload rows as Sharing, and the item appears when done. Everything is encrypted in the browser before upload.</p>
+
+  <!-- ===== My storage: setup, recovery, lock, quota ===== -->
+  <div class="gsec">3 · My storage: first-time setup, forgotten password, auto-lock, full storage</div>
+  <div class="ggrid">
+    <div class="fr"><p class="cap"><b>First time:</b> create the storage password (shown instead of the lock screen)</p>
+      <div class="card vault-lock" style="max-width:none">
+        <div class="lock-ic"><svg width="26" height="26"><use href="#i-shield"/></svg></div>
+        <h2>Set up My storage</h2>
+        <p>Choose a storage password. It encrypts everything on this device before it is saved, so only you can open it.</p>
+        <div class="field" style="text-align:left"><label>Storage password</label><input class="input" type="password" value="xxxxxxxxxxxxxx"><div class="hintline">At least 10 characters. Don't reuse your login password.</div></div>
+        <div class="field" style="text-align:left"><label>Repeat it</label><input class="input" type="password" value="xxxxxxxxxxxxxx"></div>
+        <label class="tick" style="text-align:left"><input type="checkbox">I understand this password can't be reset. If I forget it, my storage is lost and nobody can recover it.</label>
+        <button class="primary" disabled style="width:100%;justify-content:center;margin-top:12px">Create My storage</button>
+      </div>
+    </div>
+    <div class="fr"><p class="cap"><b>Forgot it?</b> The lock screen's link leads here: erase and start again (typed confirmation)</p>
+      <div class="card pad">
+        <div class="modal-h"><h3>Erase My storage</h3><button class="mini"><svg width="16" height="16"><use href="#i-x"/></svg></button></div>
+        <div class="erase-box"><b>This permanently deletes everything in My storage</b> (84.6 MB: 2 passwords, 1 note, 1 link, 4 photos, 1 file). It can't be undone. Your shared files are not affected.</div>
+        <div class="field" style="margin-top:14px"><label>Type ERASE to confirm</label><input class="input" value="ERA"></div>
+        <div class="actions-r"><button class="btn">Cancel</button><button class="btn red" disabled style="opacity:.5">Erase and start again</button></div>
+      </div>
+      <p class="cap" style="margin-top:16px"><b>Auto-lock warning</b> 60 s before the 20-minute lock. Typing and uploads count as activity, and an open form is never lost</p>
+      <div class="toast"><svg width="18" height="18"><use href="#i-lock"/></svg>My storage locks in 60 s because you've been away.<button>Stay unlocked</button></div>
+    </div>
+    <div class="fr"><p class="cap"><b>Storage full:</b> the bar turns red, and Add says why it's off</p>
+      <div class="card vault-head">
+        <div class="vh-top"><div><b>My storage</b><span class="enc"><svg width="13" height="13"><use href="#i-shield"/></svg>Encrypted, only you can see this</span></div><button class="btn"><svg width="15" height="15"><use href="#i-lock"/></svg>Lock</button></div>
+        <div class="q-bar full"><i style="--p:1"></i></div>
+        <div class="q-foot"><span><b>200 MB</b> of 200 MB used · <span class="full-tag">Full</span></span><span>Delete something to add more</span></div>
+      </div>
+    </div>
+    <div class="fr"><p class="cap"><b>Empty storage</b> (just set up)</p>
+      <div class="card empty"><div class="ic"><svg width="24" height="24"><use href="#i-shield"/></svg></div><h4>Nothing saved yet</h4><p>Keep passwords, notes, links, photos and files here. Only you can open them.</p><button class="primary small" style="margin-top:14px;background:var(--navy);color:#fff"><svg width="16" height="16"><use href="#i-plus"/></svg>Add the first one</button></div>
+    </div>
+  </div>
+
+  <!-- ===== Sharing: Send to ===== -->
+  <div class="gsec">4 · Sharing: the Send-to picker</div>
+  <div class="ggrid three">
+    <div class="fr"><p class="cap"><b>Typing a name:</b> Global is always first, then matches</p>
+      <div class="card pad"><div class="field" style="margin:0"><label>Send to</label><div class="to"><span class="chip">rahim<button><svg width="12" height="12"><use href="#i-x"/></svg></button></span><input value="ta"></div>
+        <div class="dd"><div class="o"><span class="gl"><svg width="14" height="14"><use href="#i-globe"/></svg></span><b>Global</b><small>everyone</small></div><div class="o hl"><span class="ini">TA</span>tanvir<small>tanvir@southerniot.net</small></div><div class="o"><span class="ini">TS</span>tasnim<small>tasnim@southerniot.net</small></div></div></div></div>
+    </div>
+    <div class="fr"><p class="cap"><b>No match:</b> says so, and that only registered colleagues are listed</p>
+      <div class="card pad"><div class="field" style="margin:0"><label>Send to</label><div class="to"><input value="karim"></div>
+        <div class="dd"><div class="none">No colleague called "karim". Only people who have registered appear here.</div></div></div></div>
+    </div>
+    <div class="fr"><p class="cap"><b>Global chosen:</b> it replaces the people, because everyone can see it</p>
+      <div class="card pad"><div class="field" style="margin:0"><label>Send to</label><div class="to"><span class="chip global"><svg width="13" height="13"><use href="#i-globe"/></svg>Global (everyone)<button><svg width="12" height="12"><use href="#i-x"/></svg></button></span></div>
+        <div class="hintline">Everyone at Southern IoT can see this, and it goes to the Global section.</div></div></div>
+    </div>
+  </div>
+
+  <!-- ===== Sharing: uploads ===== -->
+  <div class="gsec">5 · Uploads that don't go smoothly</div>
+  <div class="ggrid">
+    <div class="fr"><p class="cap"><b>Failed, offline, too big, server full</b></p>
+      <div class="card pad"><div class="queue" style="margin:0">
+        <div class="q failed"><div class="q-top"><b>site-walkthrough-4k.mp4</b><span class="pct">Failed</span><button class="act"><svg width="13" height="13"><use href="#i-retry"/></svg>Retry</button><button class="x"><svg width="14" height="14"><use href="#i-x"/></svg></button></div><div class="track"><i style="--p:.42"></i></div><div class="q-sub"><span>0.76 GB of 1.80 GB kept, so Retry continues from there</span><span>Server didn't answer</span></div></div>
+        <div class="q paused"><div class="q-top"><b>survey-data.zip</b><span class="pct">Paused</span></div><div class="track"><i style="--p:.71"></i></div><div class="q-sub"><span>You're offline. It continues by itself when you're back</span><span>71%</span></div></div>
+        <div class="q failed"><div class="q-top"><b>backup-2025.iso</b><span class="pct">Too large</span><button class="x"><svg width="14" height="14"><use href="#i-x"/></svg></button></div><div class="q-sub"><span>12.4 GB. The limit is 10 GB per file</span><span>not sent</span></div></div>
+        <div class="q failed"><div class="q-top"><b>drone-raw.mov</b><span class="pct">Server full</span><button class="x"><svg width="14" height="14"><use href="#i-x"/></svg></button></div><div class="q-sub"><span>The server is low on space. Ask the admin, or try later</span><span>not sent</span></div></div>
+      </div></div>
+    </div>
+    <div class="fr"><p class="cap"><b>Signed out during an upload</b> (password changed elsewhere, or the session expired): uploads pause, and you sign in again without losing them</p>
+      <div class="card pad" style="text-align:center">
+        <div class="lock-ic" style="width:48px;height:48px;margin:0 auto 10px;border-radius:14px;display:grid;place-items:center;background:#eef0f8;color:var(--navy)"><svg width="22" height="22"><use href="#i-lock"/></svg></div>
+        <b>Please sign in again</b><p style="color:var(--muted);font-size:13px;margin:4px 0 14px">2 uploads are paused and will continue after you sign in.</p>
+        <div class="field" style="text-align:left"><label>Password for ayman@southerniot.net</label><input class="input" type="password"></div>
+        <button class="primary" style="width:100%;justify-content:center">Sign in and continue</button>
+      </div>
+      <p class="cap" style="margin-top:16px"><b>Same file sent again</b> to different people starts a new upload. Only an identical send (same file and same recipients) resumes</p>
+    </div>
+  </div>
+
+  <!-- ===== Lists ===== -->
+  <div class="gsec">6 · Lists: empty, loading, error, offline</div>
+  <div class="ggrid">
+    <div class="fr"><p class="cap"><b>Empty Private</b></p><div class="card empty"><div class="ic"><svg width="24" height="24"><use href="#i-lock"/></svg></div><h4>Nothing private yet</h4><p>Files and text sent to you, or by you to someone, show up here.</p></div></div>
+    <div class="fr"><p class="cap"><b>Empty Global</b></p><div class="card empty"><div class="ic"><svg width="24" height="24"><use href="#i-globe"/></svg></div><h4>Nothing shared with everyone</h4><p>Choose Global in Send to and it appears here for all staff.</p></div></div>
+    <div class="fr"><p class="cap"><b>Loading</b> (placeholder rows the same size as cards)</p>
+      <div class="items"><div class="card item"><div class="row"><div class="ficon"></div><div><div class="skel" style="width:55%"></div><div class="skel" style="width:30%;margin-top:8px"></div></div><div class="skel" style="width:90px;height:34px;border-radius:10px"></div></div></div>
+      <div class="card item"><div class="row"><div class="ficon"></div><div><div class="skel" style="width:40%"></div><div class="skel" style="width:22%;margin-top:8px"></div></div><div class="skel" style="width:90px;height:34px;border-radius:10px"></div></div></div></div>
+    </div>
+    <div class="fr"><p class="cap"><b>Can't reach the server</b> / <b>offline</b></p>
+      <div class="card pad errcard"><div class="ic"><svg width="20" height="20"><use href="#i-alert"/></svg></div><div style="flex:1"><b>Couldn't load your files</b><div style="color:var(--muted);font-size:13px">The server didn't answer. Uploads in progress are not affected.</div></div><button class="btn"><svg width="15" height="15"><use href="#i-retry"/></svg>Try again</button></div>
+      <div class="offline" style="margin-top:10px"><svg width="18" height="18"><use href="#i-wifi"/></svg>You're offline. The list will refresh when you're back.</div>
+    </div>
+  </div>
+
+  <!-- ===== Item cards edge cases ===== -->
+  <div class="gsec">7 · Item cards: many people, expiring soon, long text, folders, deleted by someone else</div>
+  <div class="ggrid">
+    <div class="fr"><p class="cap"><b>Many recipients</b> and <b>expiring within 3 days</b></p>
+      <div class="card item"><div class="row"><div class="ficon pdf"><svg width="20" height="20"><use href="#i-file"/></svg></div>
+        <div><div class="name"><span>Quarterly-review-Q3.pdf</span></div><div class="meta">From <b>you</b> to rahim, nusrat <span class="more-rc" title="tanvir, tasnim, arif, …">+12</span> · 3.1 MB · <span class="soon">expires in 2 days</span></div></div>
+        <div class="btns"><button class="btn"><svg width="15" height="15"><use href="#i-down"/></svg>Download</button><button class="del"><svg width="17" height="17"><use href="#i-trash"/></svg></button></div></div></div>
+      <p class="cap" style="margin-top:16px"><b>Folder files can be downloaded one by one</b> (click a name)</p>
+      <div class="card item"><div class="row"><div class="ficon dir"><svg width="20" height="20"><use href="#i-folder"/></svg></div>
+        <div><div class="name"><button class="toggle open"><svg width="14" height="14"><use href="#i-chev"/></svg></button><span>firmware-v3.2</span></div><div class="meta">From <b>tanvir</b> · 12 files · 64.2 MB</div></div>
+        <div class="btns"><button class="btn"><svg width="15" height="15"><use href="#i-down"/></svg>Download all</button><button class="del"><svg width="17" height="17"><use href="#i-trash"/></svg></button></div></div>
+        <div class="inside"><a href="#">app.hex ↓</a><a href="#">bootloader.bin ↓</a><a href="#">config/gw.json ↓</a><a href="#">README.md ↓</a><span>+8 more</span></div></div>
+    </div>
+    <div class="fr"><p class="cap"><b>Long text</b> folds after 4 lines, with "Show all"</p>
+      <div class="card item"><div class="row"><div class="ficon txt"><svg width="20" height="20"><use href="#i-text"/></svg></div>
+        <div><div class="name"><button class="toggle open"><svg width="14" height="14"><use href="#i-chev"/></svg></button><span>Install log, gateway 7</span></div><div class="meta">From <b>rahim</b> · 2 min ago · 120 lines</div></div>
+        <div class="btns"><button class="btn"><svg width="15" height="15"><use href="#i-copy"/></svg>Copy</button><button class="del"><svg width="17" height="17"><use href="#i-trash"/></svg></button></div></div>
+        <div class="preview clamp">[07:02:11] boot ok, fw 3.2.0
+[07:02:12] wifi: SIOT-Field-5G connected (-61 dBm)
+[07:02:14] mqtt: broker 10.10.8.51 connected
+[07:02:15] sensors: 8/8 online
+[07:02:16] upload queue: 0</div><button class="showall">Show all 120 lines</button></div>
+      <p class="cap" style="margin-top:16px"><b>Someone else deleted an item you're looking at</b>: it disappears with a short note</p>
+      <div class="toast"><svg width="18" height="18"><use href="#i-trash"/></svg>rahim deleted "Site-Survey-Report.pdf"</div>
+    </div>
+  </div>
+
+  <!-- ===== Login / Register ===== -->
+  <div class="gsec">8 · Login and Register: success and errors</div>
+  <div class="ggrid three">
+    <div class="fr"><p class="cap"><b>Register</b> (email only)</p>
+      <div class="card lcard" style="max-width:none"><h2>Create your account</h2><p>Use your Southern IoT email</p>
+        <div class="field" style="text-align:left"><label>Email</label><div class="email"><input value="tanvir"><span>@southerniot.net</span></div></div>
+        <button class="primary">Create account</button><div class="switch">Already registered? <a href="#">Sign in</a></div></div>
+    </div>
+    <div class="fr"><p class="cap"><b>After registering</b>: back on Sign in, with a message</p>
+      <div class="card lcard" style="max-width:none"><div class="ok-msg" style="text-align:left"><svg width="16" height="16"><use href="#i-check"/></svg>Account created for tanvir@southerniot.net. Sign in with the shared starting password, then set your own in Profile.</div>
+        <div class="field" style="text-align:left;margin-top:14px"><label>Password</label><input class="input" type="password"></div><button class="primary">Sign in</button></div>
+    </div>
+    <div class="fr"><p class="cap"><b>Errors</b> (one at a time, under the field)</p>
+      <div class="card pad">
+        <div class="field"><label>Email</label><div class="email" style="border-color:#f1a7a7"><input value="tanvir@gmail.com"><span>@southerniot.net</span></div><div class="err-msg"><svg width="14" height="14"><use href="#i-alert"/></svg>Only @southerniot.net emails can register.</div></div>
+        <div class="err-msg"><svg width="14" height="14"><use href="#i-alert"/></svg>Email or password is wrong.</div>
+        <div class="err-msg"><svg width="14" height="14"><use href="#i-alert"/></svg>Too many tries. Wait a minute and try again.</div>
+        <div class="hintline" style="margin-top:10px">Pasting a full address (tanvir@southerniot.net) works: the app keeps the name part.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Profile + global account ===== -->
+  <div class="gsec">9 · Profile feedback, and what the global account sees</div>
+  <div class="ggrid three">
+    <div class="fr"><p class="cap"><b>Password changed</b> (the yellow reminder then goes away for good)</p>
+      <div class="card pad"><div class="ok-msg"><svg width="16" height="16"><use href="#i-check"/></svg>Login password changed. Other devices were signed out.</div>
+        <div class="err-msg" style="margin-top:12px"><svg width="14" height="14"><use href="#i-alert"/></svg>Current password is wrong.</div>
+        <div class="err-msg"><svg width="14" height="14"><use href="#i-alert"/></svg>The new passwords don't match.</div>
+        <div class="err-msg"><svg width="14" height="14"><use href="#i-alert"/></svg>Use at least 10 characters.</div></div>
+    </div>
+    <div class="fr"><p class="cap"><b>Storage section before setup</b>: links to setup instead of a change form</p>
+      <div class="card pad"><h3 style="font-size:15px">Storage password</h3><p style="color:var(--muted);font-size:13px;margin:4px 0 12px">You haven't set up My storage yet.</p><button class="btn"><svg width="15" height="15"><use href="#i-shield"/></svg>Set up My storage</button></div>
+    </div>
+    <div class="fr"><p class="cap"><b>Signed in as global@southerniot.net</b>: no My storage tab, no password forms, Send to is fixed to Global</p>
+      <div class="top-tabs" style="margin:0 0 12px"><button class="tt on solo"><svg width="17" height="17"><use href="#i-share"/></svg>Sharing</button></div>
+      <div class="card pad"><div class="field" style="margin:0"><label>Send to</label><div class="to"><span class="chip global"><svg width="13" height="13"><use href="#i-globe"/></svg>Global (everyone)</span></div><div class="hintline">The shared global account can only share with everyone.</div></div></div>
+    </div>
+  </div>
+
+  <!-- ===== Phone ===== -->
+  <div class="gsec">10 · Phones and tablets (no hover)</div>
+  <div class="ggrid">
+    <div class="fr"><p class="cap"><b>Tap a photo</b> to open it full screen, with Download, Delete and Close</p>
+      <div class="lightbox"><img src="assets/sample-photo.jpg" alt=""><div class="lb-bar"><span>rack-wiring-photo.jpg · 4.1 MB</span><button><svg width="15" height="15"><use href="#i-down"/></svg>Download</button><button><svg width="15" height="15"><use href="#i-trash"/></svg></button><button><svg width="15" height="15"><use href="#i-x"/></svg></button></div></div>
+    </div>
+    <div class="fr"><p class="cap"><b>Hints that were hover-only are always shown</b>, e.g. "Open in new tab ↗" on PDFs. Where the phone can't pick folders (iPhone), the Folder tab explains why</p>
+      <div class="card item"><div class="row"><div class="ficon pdf"><svg width="20" height="20"><use href="#i-file"/></svg></div>
+        <div><div class="name"><span>Site-Survey-Report.pdf</span></div><div class="meta">From <b>rahim</b> · 18.4 MB · <span style="color:var(--blue)">Open in new tab ↗</span></div></div>
+        <div class="btns"><button class="btn"><svg width="15" height="15"><use href="#i-down"/></svg></button><button class="del"><svg width="17" height="17"><use href="#i-trash"/></svg></button></div></div></div>
+      <div class="offline" style="margin-top:10px"><svg width="18" height="18"><use href="#i-alert"/></svg>This phone can't choose folders. Zip the folder, or use Files to pick several files.</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
