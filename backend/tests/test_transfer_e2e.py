@@ -21,7 +21,7 @@ def test_big_file_round_trip(chunk_1mib, client, make_client, app_settings):
     init = start_upload(a, data, recipients=[r.me["id"]], name="site.mp4").json()
     uid, cs = init["upload_id"], init["chunk_size"]
     order = list(range(6)) + [3]  # chunk 3 is sent twice
-    random.Random(7).shuffle(order)
+    random.Random(7).shuffle(order)  # noqa: S311 (test ordering, not security)
 
     def send(n):
         return put_chunk(a, uid, n, data[n * cs:(n + 1) * cs]).status_code
