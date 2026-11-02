@@ -170,13 +170,17 @@ async def erase(body: EraseIn, request: Request, user: User = Depends(require_re
             remove_stored(settings.data_dir, "tmp", up.id)
             remove_stored(settings.data_dir, "vault", up.id)
 
+    def _locked_erase() -> None:
+        with QUOTA_LOCK:  # an item save that already checked the key can't land after the erase
+            _erase()
+
     ids = await asyncio.to_thread(_ids)
     async with (
         AsyncExitStack() as stack
     ):  # a chunk or complete racing the erase waits, then finds nothing
         for upload_id in sorted(ids):
             await stack.enter_async_context(app.state.upload_locks.get(upload_id))
-        await asyncio.to_thread(_erase)
+        await asyncio.to_thread(_locked_erase)
     for upload_id in ids:
         app.state.upload_locks.drop(upload_id)
 
@@ -253,8 +257,9 @@ def create_item(
 ):
     settings = request.app.state.settings
     _check_meta_size(body.meta_ct)
-    _check_key(db, user, body.key_gen)
-    with QUOTA_LOCK:  # the check and the insert are one step (parallel adds can't overshoot)
+    # the checks and the insert are one step (parallel adds, an erase, can't slip in)
+    with QUOTA_LOCK:
+        _check_key(db, user, body.key_gen)
         count = db.scalar(
             select(func.count()).select_from(VaultItem).where(VaultItem.user_id == user.id)
         )
@@ -305,8 +310,8 @@ def update_item(
 ):
     settings = request.app.state.settings
     _check_meta_size(body.meta_ct)
-    _check_key(db, user, body.key_gen)
     with QUOTA_LOCK:
+        _check_key(db, user, body.key_gen)
         item = _own_item(db, user, item_id)
         if item.version != body.version:
             return JSONResponse({"detail": "stale_version", "current": _out(item)}, status_code=409)
@@ -363,15 +368,31 @@ def get_blob(
 
 
 @router.post("/release-held")
-def release_held(
-    request: Request, user: User = Depends(require_regular_user), db: Session = Depends(get_db)
-):
+async def release_held(request: Request, user: User = Depends(require_regular_user)):
     """[Cancel it]: drop this user's vault uploads that have gone quiet (a reloaded tab)."""
-    now = utcnow()
-    released = 0
-    for up in quiet_uploads(db, user.id, HELD_IDLE, now):
-        released += up.size - up.received_bytes + META_ALLOWANCE
-        db.delete(up)
-        remove_stored(request.app.state.settings.data_dir, "tmp", up.id)
-    db.commit()
+    app = request.app
+
+    def _quiet() -> list[str]:
+        with app.state.session_factory() as db:
+            return [u.id for u in quiet_uploads(db, user.id, HELD_IDLE, utcnow())]
+
+    def _release(ids: list[str]) -> int:
+        released = 0
+        with app.state.session_factory() as db:
+            # re-checked under the locks: a chunk that landed meanwhile makes it active again
+            for up in quiet_uploads(db, user.id, HELD_IDLE, utcnow()):
+                if up.id in ids:
+                    released += up.size + META_ALLOWANCE
+                    db.delete(up)
+                    remove_stored(app.state.settings.data_dir, "tmp", up.id)
+            db.commit()
+        return released
+
+    ids = await asyncio.to_thread(_quiet)
+    async with AsyncExitStack() as stack:  # a chunk being recorded finishes first
+        for upload_id in sorted(ids):
+            await stack.enter_async_context(app.state.upload_locks.get(upload_id))
+        released = await asyncio.to_thread(_release, ids)
+    for upload_id in ids:
+        app.state.upload_locks.drop(upload_id)
     return {"released_bytes": released}

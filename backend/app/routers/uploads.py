@@ -182,6 +182,8 @@ async def put_chunk(upload_id: str, n: int, request: Request, user: User = Depen
                 raise HTTPException(409, "already_complete")
             if not 0 <= n < num_chunks(up.size, up.chunk_size):
                 raise HTTPException(400, "bad_chunk")
+            up.updated_at = utcnow()  # a chunk has started: alive (its body may take minutes)
+            db.commit()
             return chunk_len(up.size, up.chunk_size, n)
 
     expected = await asyncio.to_thread(_expected)

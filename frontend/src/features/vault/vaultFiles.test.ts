@@ -124,3 +124,25 @@ describe('telling the user after a reload', () => {
     expect(takeUnfinished(session)).toBe(0)
   })
 })
+
+describe('review fixes', () => {
+  it('a lock while a file is being encrypted ends with a message, not an unhandled error', async () => {
+    const real = ctx.store.encryptFile.bind(ctx.store)
+    vi.spyOn(ctx.store, 'encryptFile').mockImplementation(async (f: Blob) => {
+      const out = await real(f)
+      ctx.store.lock() // another tab's Lock, or idle, while this file was being encrypted
+      return out
+    })
+    const out = await addVaultFiles([pdf('a.pdf')], 'file', ctx.store, ctx.up)
+    expect(out.error).toBe('My storage locked — add the rest again after unlocking.')
+    expect(ctx.up.jobs()).toEqual([])
+  })
+
+  it('a photo with the largest thumbnail still fits the 64 KiB metadata allowance', async () => {
+    const { THUMB_MAX } = await import('./vaultFiles')
+    const { toB64 } = await import('./crypto')
+    const thumb = toB64(new Uint8Array(THUMB_MAX).fill(255))
+    const meta: FileMeta = { kind: 'photo', name: 'x'.repeat(200) + '.jpg', mime: 'image/jpeg', size: 9_999_999, prefix: 'AAAAAAAAAAA=', thumb }
+    expect((await ctx.store.encrypt(meta)).length).toBeLessThanOrEqual(64 * 1024)
+  })
+})

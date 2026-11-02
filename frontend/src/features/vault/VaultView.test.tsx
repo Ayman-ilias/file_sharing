@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api/client'
 import { ayman } from '../../test/http'
+import { Corrupt } from './crypto'
 import { fakeVault } from './fakeVault'
 import { VaultStore } from './store'
 import { VaultView } from './VaultView'
@@ -103,6 +104,16 @@ describe('lock screen', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Unlock' }))
     expect(await screen.findByText('Wrong storage password.')).toBeInTheDocument()
     expect(input).toHaveValue('')
+  })
+
+  it('a damaged storage key says so (and erase stays one click away)', async () => {
+    const { store } = await locked()
+    vi.spyOn(store, 'unlock').mockRejectedValue(new Corrupt('key'))
+    view(store)
+    await userEvent.type(screen.getByLabelText('Storage password'), PW)
+    await userEvent.click(screen.getByRole('button', { name: 'Unlock' }))
+    expect(await screen.findByText('Your storage key looks damaged. Erase My storage to start again.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Erase My storage and start again' })).toBeInTheDocument()
   })
 
   it('unlocks with the right password', async () => {

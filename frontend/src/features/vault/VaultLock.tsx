@@ -1,5 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { Icon } from '../../icons'
+import { Corrupt } from './crypto'
 import { EraseDialog } from './EraseDialog'
 import { WrongPassword, type LockReason, type VaultStore } from './store'
 
@@ -20,7 +21,9 @@ export function VaultLock({ store, lockedBecause, usedBytes, itemCount }: Props)
     try {
       await store.unlock(pw)
     } catch (err) {
-      setError(err instanceof WrongPassword ? 'Wrong storage password.' : "Couldn't open it. Check your connection and try again.")
+      setError(err instanceof WrongPassword ? 'Wrong storage password.'
+        : err instanceof Corrupt ? 'Your storage key looks damaged. Erase My storage to start again.'
+        : "Couldn't open it. Check your connection and try again.")
       setPw('')
       input.current?.focus()
     } finally {

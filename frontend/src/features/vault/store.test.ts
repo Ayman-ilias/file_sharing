@@ -310,3 +310,53 @@ it('meta written by the store decrypts with the unwrapped key (format check)', a
   expect(await decryptMeta([...srv.items.values()][0].meta_ct, key)).toEqual(note)
   expect(await encryptMeta(note, key)).toMatch(/^[A-Za-z0-9+/]+=*$/)
 })
+
+describe('review fixes', () => {
+  it('closing one tab locks only that tab (others keep their key and their open forms)', async () => {
+    const srv = fakeVault()
+    const channel = bus()
+    const a = tab(srv, channel)
+    const b = tab(srv, channel)
+    await a.store.load()
+    await b.store.load()
+    await a.store.setup(PW)
+    await vi.waitFor(() => expect(b.store.snapshot().status).toBe('open'))
+    a.env.dispatchEvent(new Event('pagehide'))
+    await settle()
+    expect(a.store.snapshot().status).toBe('locked')
+    expect(b.store.snapshot().status).toBe('open')
+  })
+
+  it('an erase on another device (no shared channel) is noticed: this tab goes to setup', async () => {
+    const srv = fakeVault()
+    const a = tab(srv)
+    await a.store.load()
+    await a.store.setup(PW)
+    const b = tab(srv) // another browser: no BroadcastChannel between them
+    await b.store.load()
+    await b.store.unlock(PW)
+    await a.store.erase('login-pass')
+    await expect(b.store.add(note)).rejects.toBeInstanceOf(KeyChanged)
+    expect(b.store.snapshot().status).toBe('setup')
+  })
+
+  it('a status that says "not set up" while this tab is open wipes the tab', async () => {
+    const srv = fakeVault()
+    const a = tab(srv)
+    await a.store.load()
+    await a.store.setup(PW)
+    srv.api.status.mockResolvedValueOnce({ ...(await srv.api.status()), initialized: false, key_gen: null, salt: null, wrapped_key: null, iterations: null })
+    await a.store.refresh()
+    expect(a.store.snapshot().status).toBe('setup')
+    expect(a.store.heldKeyForTest()).toBeNull()
+  })
+
+  it('attaching uses the key generation the file was encrypted with', async () => {
+    const srv = fakeVault()
+    const a = tab(srv)
+    await a.store.load()
+    await a.store.setup(PW)
+    const ct = await a.store.encrypt(note)
+    await expect(a.store.addEncrypted(ct, undefined, 'an-older-generation')).rejects.toBeInstanceOf(KeyChanged)
+  })
+})

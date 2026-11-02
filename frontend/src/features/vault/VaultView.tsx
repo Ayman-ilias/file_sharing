@@ -6,6 +6,7 @@ import { UploadQueue } from '../sharing/UploadQueue'
 import type { Uploader } from '../uploads/Uploader'
 import { useUploads } from '../uploads/useUploads'
 import { AutoLockToast } from './AutoLockToast'
+import { Corrupt } from './crypto'
 import { downloadVaultFile } from './PhotoGrid'
 import type { VaultStore } from './store'
 import { addVaultFiles, markUnfinished, PHOTO_TYPES, takeUnfinished } from './vaultFiles'
@@ -96,7 +97,8 @@ export function VaultView({ me, store: given, uploader: givenUploader, session: 
       {picker(files, 'file', 'Choose files')}
       <VaultOpen store={store} takeStartMessage={takeStartMessage}
         onAddFiles={(k) => (k === 'photo' ? photos : files).current?.click()}
-        onDownload={(item) => void downloadVaultFile(store, item).catch(() => setProblem({ text: "Couldn't open it. Try again.", held: 0 }))}
+        onDownload={(item) => void downloadVaultFile(store, item).catch((e) => setProblem({
+          text: e instanceof Corrupt ? "This file can't be decrypted" : "Couldn't open it. Try again.", held: 0 }))}
         queue={
           <>
             {problem && (

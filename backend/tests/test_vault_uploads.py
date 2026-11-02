@@ -164,7 +164,7 @@ def test_release_held_spares_active_upload(small_vault, client, db_session):
     gen = owner(client)
     quiet = start_vault(client, 100_000, gen).json()["upload_id"]
     active = start_vault(client, 10_000, gen).json()["upload_id"]
-    db_session.get(Upload, quiet).updated_at = utcnow() - timedelta(seconds=40)
+    db_session.get(Upload, quiet).updated_at = utcnow() - timedelta(minutes=3)
     db_session.commit()
     assert client.get("/api/vault").json()["held_bytes"] == 100_000 + 65_536
     r = client.post("/api/vault/release-held")
@@ -252,3 +252,42 @@ def test_erase_during_complete_leaves_no_file(
     assert db_session.get(Upload, uid) is None
     assert not storage_path(app_settings.data_dir, "vault", uid).exists()
     assert not storage_path(app_settings.data_dir, "tmp", uid).exists()
+
+
+def test_running_upload_counts_its_full_size(small_vault, client, db_session):
+    """Review #1: bytes already received by a running upload still count (no window for a 2nd)."""
+    from app.models import Upload
+
+    gen = owner(client)
+    uid = start_vault(client, 100_000, gen).json()["upload_id"]
+    up = db_session.get(Upload, uid)
+    up.received, up.received_bytes = list(range(10)), 90_000  # most of it is already sent
+    db_session.commit()
+    assert client.get("/api/vault").json()["used_bytes"] == 100_000 + 65_536
+    r = start_vault(client, 100_000, gen)  # 2 × (100,000 + 65,536) > 300,000
+    assert r.status_code == 507 and r.json()["detail"] == "vault_full"
+
+
+def test_release_held_spares_a_slow_chunk(small_vault, client, db_session):
+    """Review #2: a 16 MiB chunk can take minutes on a slow link; 'quiet' must outlast that."""
+    from app.models import Upload
+
+    gen = owner(client)
+    slow = start_vault(client, 100_000, gen).json()["upload_id"]
+    db_session.get(Upload, slow).updated_at = utcnow() - timedelta(seconds=90)
+    db_session.commit()
+    assert client.get("/api/vault").json()["held_bytes"] == 0
+    assert client.post("/api/vault/release-held").json() == {"released_bytes": 0}
+
+
+def test_chunk_start_counts_as_activity(chunk4, client, db_session):
+    """Review #2: a chunk that has started (body still arriving) marks the upload active."""
+    from app.models import Upload
+
+    gen = owner(client)
+    uid = start_vault(client, 8, gen).json()["upload_id"]
+    db_session.get(Upload, uid).updated_at = utcnow() - timedelta(minutes=10)
+    db_session.commit()
+    put_chunk(client, uid, 0, b"abc")  # wrong size: refused, but it did start
+    db_session.expire_all()
+    assert utcnow() - db_session.get(Upload, uid).updated_at < timedelta(seconds=5)

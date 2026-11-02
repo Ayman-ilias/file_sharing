@@ -9,7 +9,9 @@ import type { VaultStore } from './store'
 export const PHOTO_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 const META_ALLOWANCE = 64 * 1024 // reserved per upload by the server for the item's metadata
 const THUMB_WIDTH = 400
-const THUMB_MAX = 60 * 1024
+// a thumbnail is base64'd into the JSON, encrypted and base64'd again (about ×1.8): 34 KiB keeps the
+// whole photo meta inside the server's 64 KiB metadata allowance
+export const THUMB_MAX = 34 * 1024
 const UNFINISHED = 'fs.vault.unfinished'
 
 type Session = { getItem(k: string): string | null; setItem(k: string, v: string): void; removeItem(k: string): void }
@@ -66,18 +68,27 @@ export async function addVaultFiles(
   if (need > free) {
     return { error: `Not enough space in My storage (needs ${formatBytes(need)}, ${formatBytes(free)} free).`, held: heldBytes }
   }
+  const locked = { error: 'My storage locked — add the rest again after unlocking.' }
   for (const file of files) {
     const keyGen = store.currentKeyGen()
-    if (store.snapshot().status !== 'open' || !keyGen) return { error: 'My storage locked — add the rest again after unlocking.' }
-    const thumb = kind === 'photo' ? await makeThumb(file) : undefined
-    const { blob, prefix } = await store.encryptFile(file)
-    const meta: FileMeta = {
-      kind, name: file.name, size: file.size, prefix,
-      mime: kind === 'photo' ? file.type : file.type || 'application/octet-stream',
-      ...(thumb ? { thumb } : {}),
+    if (store.snapshot().status !== 'open' || !keyGen) return locked
+    let blob: Blob
+    let metaCt: string
+    try {
+      const thumb = kind === 'photo' ? await makeThumb(file) : undefined
+      const sealed = await store.encryptFile(file)
+      blob = sealed.blob
+      const meta: FileMeta = {
+        kind, name: file.name, size: file.size, prefix: sealed.prefix,
+        mime: kind === 'photo' ? file.type : file.type || 'application/octet-stream',
+        ...(thumb ? { thumb } : {}),
+      }
+      metaCt = await store.encrypt(meta) // before the upload: a lock mid-upload doesn't matter
+    } catch (e) {
+      if ((e as Error)?.name === 'Locked') return locked // locked while this file was being encrypted
+      return { error: `Couldn't read "${file.name}". Choose it again.` }
     }
-    const metaCt = await store.encrypt(meta) // before the upload: a lock mid-upload doesn't matter
-    const id = uploader.addVaultFile(blob, file.name, keyGen, async (blobId) => { await store.addEncrypted(metaCt, blobId) })
+    const id = uploader.addVaultFile(blob, file.name, keyGen, async (blobId) => { await store.addEncrypted(metaCt, blobId, keyGen) })
     await waitForJob(uploader, id, store)
   }
   return {}

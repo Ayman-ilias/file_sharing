@@ -78,7 +78,8 @@ export class VaultStore {
     const active = () => this.touch()
     for (const type of ['keydown', 'pointerdown', 'wheel']) this.env.addEventListener(type, active)
     this.env.addEventListener('visibilitychange', () => this.check(true))
-    this.env.addEventListener('pagehide', () => this.lock(null))
+    // only this tab drops its key (bfcache); the other open tabs keep theirs, and their forms
+    this.env.addEventListener('pagehide', () => this.lock(null, false))
     this.env.addEventListener('fs:signed-out', () => this.lock(null, false))
     this.env.addEventListener('fs:signed-in', (e) => this.signedIn((e as CustomEvent<{ id?: number }>).detail?.id))
   }
@@ -227,9 +228,10 @@ export class VaultStore {
   }
 
   /** Save an item whose meta is already encrypted (vault uploads: a lock mid-upload doesn't matter). */
-  async addEncrypted(metaCt: string, blobId?: string): Promise<DecryptedItem> {
-    if (!this.keyGen) throw new Locked()
-    const row = await this.guard(() => this.api.create(metaCt, this.keyGen!, blobId))
+  async addEncrypted(metaCt: string, blobId?: string, keyGen = this.keyGen): Promise<DecryptedItem> {
+    if (!keyGen) throw new Locked()
+    // the generation the meta was encrypted under: an erase + new setup in between is refused
+    const row = await this.guard(() => this.api.create(metaCt, keyGen, blobId))
     const item = this.key ? await this.decrypt(row, this.key) : ({ ...row, meta: null, broken: true } as DecryptedItem)
     if (this.key) this.set({ items: [item, ...this.state.items] })
     this.post({ t: 'changed' })
@@ -311,6 +313,10 @@ export class VaultStore {
     try {
       return await call()
     } catch (e) {
+      if (e instanceof ApiError && e.detail === 'not_initialized') {
+        this.wiped() // erased on another device: this tab's key belongs to nothing now
+        throw new KeyChanged()
+      }
       if (e instanceof ApiError && e.detail === 'key_changed') {
         this.lock('manual') // written with a key this vault no longer has (erased and set up elsewhere)
         this.keyGen = null
@@ -342,6 +348,11 @@ export class VaultStore {
   }
 
   private applyStatus(st: VaultStatus): void {
+    if (!st.initialized && (this.key || this.state.status === 'open' || this.state.status === 'locked')) {
+      this.wiped() // erased elsewhere (another device has no BroadcastChannel with us)
+      this.set({ quotaBytes: st.quota_bytes })
+      return
+    }
     if (st.key_gen && this.keyGen && st.key_gen !== this.keyGen) {
       this.lock('manual', false) // erased and set up again elsewhere: this key is useless now
     }
