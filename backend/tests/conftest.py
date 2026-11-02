@@ -80,3 +80,28 @@ def raw_client(app):
     """A client without the X-Requested-With header (a cross-site browser request)."""
     with TestClient(app) as c:
         yield c
+
+
+def login(client, email: str, password: str = TEST_SHARED_PASSWORD):
+    """Register if needed, sign in, set `client.me`, and return the same client."""
+    r = client.post("/api/auth/register", json={"email": email})
+    assert r.status_code in (200, 201), r.text
+    r = client.post("/api/auth/login", json={"email": email, "password": password})
+    assert r.status_code == 200, r.text
+    client.me = r.json()
+    return client
+
+
+@pytest.fixture
+def make_client(app, client):
+    """Extra clients on the same running app, each with its own cookies."""
+    made = []
+
+    def _make():
+        c = TestClient(app, headers={"X-Requested-With": "fs"})
+        made.append(c)
+        return c
+
+    yield _make
+    for c in made:
+        c.close()
