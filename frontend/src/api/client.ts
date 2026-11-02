@@ -76,7 +76,7 @@ function putBlob(path: string, blob: Blob, opts: PutOptions = {}): Promise<void>
 
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
-  send: <T>(method: 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown) =>
+  send: <T>(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown) =>
     body === undefined ? request<T>(method, path) : request<T>(method, path, JSON.stringify(body), true),
   put: putBlob,
 }

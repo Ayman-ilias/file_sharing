@@ -7,7 +7,7 @@ import { SpeedMeter } from '../../lib/speed'
 
 export type UploadApi = {
   get<T>(path: string): Promise<T>
-  send<T>(method: 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T>
+  send<T>(method: 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T>
   put(path: string, blob: Blob, opts?: PutOptions): Promise<void>
 }
 
