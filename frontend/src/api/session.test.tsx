@@ -33,4 +33,15 @@ describe('useSession', () => {
     act(() => { window.dispatchEvent(new Event('fs:signed-out')) })
     expect(result.current.me).toBeNull()
   })
+
+  it('announces fs:signed-in when a user is loaded, so paused uploads continue', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => json(200, me))
+    const seen = vi.fn()
+    window.addEventListener('fs:signed-in', seen)
+    const { result } = renderHook(() => useSession())
+    await waitFor(() => expect(result.current.me).not.toBeNull())
+    await act(() => result.current.refresh())
+    window.removeEventListener('fs:signed-in', seen)
+    expect(seen).toHaveBeenCalledTimes(2)
+  })
 })

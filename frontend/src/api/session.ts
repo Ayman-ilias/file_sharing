@@ -9,6 +9,7 @@ export function useSession() {
   const refresh = useCallback(async () => {
     try {
       setMe(await api.get<Me>('/api/auth/me'))
+      window.dispatchEvent(new Event('fs:signed-in')) // paused uploads continue
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) setMe(null)
       else throw e
