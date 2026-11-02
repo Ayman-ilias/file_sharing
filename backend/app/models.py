@@ -115,6 +115,7 @@ class Batch(Base):
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     item_id: Mapped[str | None] = mapped_column(String(32))
+    failed_paths: Mapped[list] = mapped_column(JSON, default=list)  # same answer on a retry
 
 
 class AuditLog(Base):

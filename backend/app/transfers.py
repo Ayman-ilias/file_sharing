@@ -137,6 +137,8 @@ async def record_chunk(app: FastAPI, upload_id: str, n: int, data: bytes,
                 up.received_bytes += len(data)
             up.updated_at = utcnow()
             db.commit()
+            if up.batch_id and len(up.received) == num_chunks(up.size, up.chunk_size):
+                complete_batch_file(db, up, data_dir)
 
     async with app.state.upload_locks.get(upload_id):
         chunk_size = await asyncio.to_thread(_check)
@@ -180,3 +182,16 @@ def finalize_file(data_dir: Path, upload: Upload) -> None:
         os.fsync(fh.fileno())
     os.replace(tmp, dest)
     _fsync_dir(dest.parent)
+
+
+def complete_batch_file(db: Session, up: Upload, data_dir: Path) -> None:
+    """A folder file is done when its last chunk lands (no separate complete call)."""
+    from app.models import Batch
+
+    finalize_file(data_dir, up)
+    now = utcnow()
+    up.completed_at, up.storage_id, up.updated_at = now, up.id, now
+    batch = db.get(Batch, up.batch_id)
+    if batch is not None:
+        batch.updated_at = now
+    db.commit()

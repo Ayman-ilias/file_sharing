@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.db import utcnow
-from app.models import FolderEntry, Item, Upload
+from app.models import Batch, FolderEntry, Item, Upload
 from app.storage import remove_stored
 
 log = logging.getLogger("fs.jobs")
@@ -45,6 +45,22 @@ def run_cleanup(db: Session, settings: Settings, now: datetime) -> CleanupReport
             log.exception("cleanup: could not delete expired item %s", item.id)
 
     idle_since = now - timedelta(hours=settings.stale_after_hours)
+    stale_batches = db.scalars(
+        select(Batch).where(Batch.completed_at.is_(None), Batch.updated_at <= idle_since)
+    ).all()
+    for batch in stale_batches:  # abandoned folders: their finished files go too
+        try:
+            for up in db.scalars(select(Upload).where(Upload.batch_id == batch.id)).all():
+                remove_stored(settings.data_dir, "tmp", up.id)
+                remove_stored(settings.data_dir, "files", up.storage_id)
+                db.delete(up)
+            db.delete(batch)
+            db.commit()
+        except Exception:
+            db.rollback()
+            report.errors += 1
+            log.exception("cleanup: could not delete stale batch %s", batch.id)
+
     stale = db.scalars(
         select(Upload).where(Upload.completed_at.is_(None), Upload.updated_at <= idle_since)
     ).all()

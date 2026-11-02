@@ -33,6 +33,7 @@ def upgrade() -> None:
     sa.Column('updated_at', app.db.UTCDateTime(), nullable=False),
     sa.Column('completed_at', app.db.UTCDateTime(), nullable=True),
     sa.Column('item_id', sa.String(length=32), nullable=True),
+    sa.Column('failed_paths', sa.JSON(), nullable=False, server_default='[]'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )

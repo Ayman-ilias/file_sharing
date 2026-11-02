@@ -76,3 +76,8 @@ def test_0002_upgrades_a_database_with_existing_uploads(tmp_path):
     with eng.begin() as c:
         row = c.execute(text("select received_bytes, updated_at, created_at from uploads")).one()
     assert row[0] == 0 and row[1] == row[2]
+
+
+def test_batches_store_failed_paths(client, app_settings):
+    con = sqlite3.connect(app_settings.data_dir / "app.db")
+    assert "failed_paths" in {r[1] for r in con.execute("pragma table_info(batches)")}

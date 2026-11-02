@@ -176,3 +176,20 @@ def send_all(c, upload_id: str, data: bytes, chunk_size: int):
     for n in range((len(data) + chunk_size - 1) // chunk_size):
         r = put_chunk(c, upload_id, n, data[n * chunk_size:(n + 1) * chunk_size])
         assert r.status_code == 204, r.text
+
+
+def start_batch(c, *, name="folder", file_count=3, recipients=(), is_global=False):
+    return c.post("/api/batches", json={"name": name, "file_count": file_count,
+                                        "recipient_ids": list(recipients), "is_global": is_global})
+
+
+def register_files(c, batch_id, files):
+    """files: list of (relative_path, data_bytes)."""
+    import hashlib
+
+    def key(p):  # a valid key even for hostile paths, so the PATH check is what's tested
+        return "bk-" + hashlib.sha1(p.encode()).hexdigest()[:16]  # noqa: S324 (not security)
+
+    body = {"files": [{"relative_path": p, "size": len(d), "mime": "application/octet-stream",
+                       "client_key": key(p)} for p, d in files]}
+    return c.post(f"/api/batches/{batch_id}/files", json=body)
