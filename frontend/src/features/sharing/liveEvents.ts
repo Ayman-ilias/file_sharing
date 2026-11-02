@@ -22,6 +22,7 @@ type Msg =
   | { t: 'who' }
   | { t: 'bye'; id: string }
   | { t: 'event'; ev: LiveEvent }
+  | { t: 'signed-in' }
 
 type Deps = {
   source?: (url: string) => SourceLike
@@ -65,7 +66,13 @@ export class LiveEvents {
   private timers = new Set<ReturnType<typeof setTimeout>>()
   private beatTimer: ReturnType<typeof setInterval> | null = null
   private watchdog: ReturnType<typeof setTimeout> | null = null
+  /** Signed in again in this tab: tell the other tabs too (the leader may be another tab). */
   private onSignedIn = () => {
+    this.channel?.postMessage({ t: 'signed-in' })
+    this.reopen()
+  }
+
+  private reopen(): void {
     if (this.signedOut && this.leader) {
       this.signedOut = false
       this.failures = 0
@@ -154,6 +161,8 @@ export class LiveEvents {
       this.lastBeat = 0 // the next tick takes over
     } else if (msg.t === 'event') {
       this.emit(msg.ev)
+    } else if (msg.t === 'signed-in') {
+      this.reopen()
     }
   }
 

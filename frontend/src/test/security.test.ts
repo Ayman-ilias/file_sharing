@@ -96,4 +96,9 @@ describe('security rules', () => {
     }
     expect(writes.filter((w) => w.csrf !== 'fs')).toEqual([])
   })
+
+  it('uses no regex lookbehind (Safari before 16.4 cannot parse it, the whole page goes blank)', () => {
+    const bad = sources(SRC).filter((f) => /\(\?<[!=]/.test(readFileSync(f, 'utf8')))
+    expect(bad).toEqual([])
+  })
 })

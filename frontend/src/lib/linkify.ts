@@ -2,8 +2,9 @@
 
 export type LinkPart = { href: string; text: string }
 
-// a scheme or www must start the word: "xhttp://" and "javascript://www." don't count
-const CANDIDATE = /(?<![\w/:.@-])(?:https?:\/\/|www\.)[^\s<>"'`]+/gi
+// a scheme or www must start the word: "xhttp://" and "javascript://www." don't count.
+// Group 1 is the character before it (no lookbehind: Safari before 16.4 can't parse one).
+const CANDIDATE = /(^|[^\w/:.@-])((?:https?:\/\/|www\.)[^\s<>"'`]+)/gi
 const TRAILING = /[.,!?;:'")\]}]$/
 
 function count(s: string, ch: string): number {
@@ -36,12 +37,13 @@ export function linkify(text: string): Array<string | LinkPart> {
   const out: Array<string | LinkPart> = []
   let at = 0
   for (const m of text.matchAll(CANDIDATE)) {
-    const raw = trim(m[0])
+    const start = m.index + m[1].length
+    const raw = trim(m[2])
     const href = toHref(raw)
     if (!href) continue
-    if (m.index > at) out.push(text.slice(at, m.index))
+    if (start > at) out.push(text.slice(at, start))
     out.push({ href, text: raw })
-    at = m.index + raw.length
+    at = start + raw.length
   }
   if (at < text.length) out.push(text.slice(at))
   return out

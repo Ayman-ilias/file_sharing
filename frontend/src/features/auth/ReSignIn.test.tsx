@@ -33,4 +33,11 @@ describe('ReSignIn', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Sign in and continue' }))
     expect(await screen.findByText('Email or password is wrong.')).toBeInTheDocument()
   })
+
+  it('lets someone else sign in instead', async () => {
+    const onSwitchUser = vi.fn()
+    render(<ReSignIn me={ayman} paused={0} onSignedIn={() => {}} onSwitchUser={onSwitchUser} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in as someone else' }))
+    expect(onSwitchUser).toHaveBeenCalled()
+  })
 })

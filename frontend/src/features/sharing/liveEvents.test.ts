@@ -161,4 +161,19 @@ describe('LiveEvents', () => {
     expect(live.isLeader()).toBe(false)
     vi.unstubAllGlobals()
   })
+
+  it('signing in again in another tab brings the live stream back', async () => {
+    const channel = bus()
+    const a = tab(channel, vi.fn().mockResolvedValue(false)) // the leader finds the session gone
+    await vi.advanceTimersByTimeAsync(600)
+    const b = tab(channel)
+    await vi.advanceTimersByTimeAsync(1500)
+    open()[0].fire('error')
+    await vi.advanceTimersByTimeAsync(10)
+    expect(open()).toHaveLength(0)
+    b.env.dispatchEvent(new Event('fs:signed-in')) // the user signs in again in tab B
+    await vi.advanceTimersByTimeAsync(10)
+    expect(open()).toHaveLength(1)
+    expect(a.live.isLeader()).toBe(true)
+  })
 })

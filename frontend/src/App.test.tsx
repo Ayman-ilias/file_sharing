@@ -107,4 +107,18 @@ describe('App shell', () => {
     expect(cancelAll).toHaveBeenCalled()
     expect(await screen.findByRole('heading', { name: 'Southern IoT Files' })).toBeInTheDocument()
   })
+
+  it('"Sign in as someone else" from the re-sign-in dialog goes to the login page', async () => {
+    let signedIn = true
+    fakeApi({
+      'GET /api/auth/me': () => (signedIn ? json(200, ayman) : json(401, { detail: 'not_signed_in' })),
+      'POST /api/auth/logout': () => json(401, { detail: 'not_signed_in' }),
+    })
+    render(<App />)
+    await screen.findByRole('tab', { name: 'Sharing' })
+    signedIn = false
+    act(() => { window.dispatchEvent(new Event('fs:signed-out')) })
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in as someone else' }))
+    expect(await screen.findByRole('heading', { name: 'Southern IoT Files' })).toBeInTheDocument()
+  })
 })

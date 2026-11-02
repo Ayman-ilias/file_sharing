@@ -3,7 +3,7 @@ import { api, ApiError } from '../../api/client'
 import type { Me } from '../../api/types'
 import { Icon } from '../../icons'
 
-type Props = { me: Me; paused: number; onSignedIn: () => void }
+type Props = { me: Me; paused: number; onSignedIn: () => void; onSwitchUser?: () => void }
 
 function waiting(n: number): string {
   if (n === 0) return 'Your session ended. Sign in to carry on where you were.'
@@ -11,7 +11,7 @@ function waiting(n: number): string {
 }
 
 /** Signed out mid-session: ask for the password in place, so uploads and the page survive. */
-export function ReSignIn({ me, paused, onSignedIn }: Props) {
+export function ReSignIn({ me, paused, onSignedIn, onSwitchUser }: Props) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -49,6 +49,12 @@ export function ReSignIn({ me, paused, onSignedIn }: Props) {
         </div>
         {error && <div className="err-msg" role="alert" style={{ textAlign: 'left' }}><Icon name="i-alert" size={14} />{error}</div>}
         <button className="primary" type="submit" disabled={busy} style={{ width: '100%', justifyContent: 'center' }}>Sign in and continue</button>
+        {onSwitchUser && (
+          <div className="switch" style={{ marginTop: 14, fontSize: 13.5, color: 'var(--muted)' }}>
+            Not {me.username}?{' '}
+            <button type="button" onClick={onSwitchUser} style={{ color: 'var(--navy)', fontWeight: 600 }}>Sign in as someone else</button>
+          </div>
+        )}
       </form>
     </div>
   )

@@ -62,7 +62,7 @@ export default function App() {
       <ProfileDrawer me={me} open={profileOpen && !!signedIn} onClose={() => setProfileOpen(false)} onChanged={() => void refresh()} />
       {!signedIn && (
         <ReSignIn me={me} paused={jobs.filter((j) => j.state === 'paused' || j.state === 'queued').length}
-          onSignedIn={() => void refresh()} />
+          onSignedIn={() => void refresh()} onSwitchUser={() => void logout()} />
       )}
     </>
   )

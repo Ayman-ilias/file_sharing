@@ -85,3 +85,12 @@ Final: minor (deferred): no client message for folders over 5,000 files; empty f
 Final: minor (deferred): refetchSoon still fetches the private section for the global account
 Final: minor (deferred): parity at 390 px covers Sharing/Private only
 Final: Ruling: reviewer's "declined to judge" items (parity numbers, SERVE_FILES under nginx, PDF unsandboxed, full-image thumbnails, vault UI) — parity was run here (11/11); the rest are plan 4/5 or recorded rulings — cost if wrong: none new
+After review (owner: "solve the issues", 2026-11-02): fixed deferred minors with tests first —
+- linkify lookbehind (blank page on Safari < 16.4) → capture group; test: no regex lookbehind anywhere in src
+- signed-out leader tab: sign-in in any tab is shared over the channel and reopens the stream; test with two fake tabs
+- ReSignIn covered Log out → "Sign in as someone else" (logs out; the engine drops the old user's jobs on the next user's sign-in); ReSignIn + App tests
+- upload queue now also under the Text tab (ruling 38 reversed): Interrupted rows visible after a reload; SendCard test
+- folder over 5,000 files / empty folder → clear message, nothing sent; SendCard test
+- global account never fetches the private list (also on reconnects); Lists test
+Still deferred: per-event work with 1 MiB text / 5,000 files, hidden-leader flapping, cancel during complete, parity at 390 px for Global/Login.
+

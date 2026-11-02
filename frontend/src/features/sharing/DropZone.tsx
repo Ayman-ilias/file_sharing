@@ -14,7 +14,7 @@ export function DropZone({ folder, onFiles }: Props) {
   async function onDrop(e: DragEvent<HTMLDivElement>) {
     e.preventDefault()
     const files = folder ? await droppedFolder(e.dataTransfer) : droppedFiles(e.dataTransfer)
-    if (files?.length) onFiles(files)
+    if (files && (folder || files.length)) onFiles(files) // an empty folder still gets its message
   }
 
   return (
@@ -41,7 +41,7 @@ export function DropZone({ folder, onFiles }: Props) {
         onChange={(e) => {
           const files = Array.from(e.target.files ?? [])
           e.target.value = '' // the same file can be chosen again
-          if (files.length) onFiles(files)
+          if (files.length || folder) onFiles(files)
         }}
       />
     </div>

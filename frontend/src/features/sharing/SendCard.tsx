@@ -13,6 +13,8 @@ import { UploadQueue } from './UploadQueue'
 
 type Tab = 'text' | 'files' | 'folder'
 
+const MAX_FOLDER_FILES = 5000 // the server's MAX_BATCH_FILES
+
 type Props = { me: Me; uploader?: Uploader; folderPick?: boolean }
 
 const TABS: [Tab, string, string][] = [['text', 'i-text', 'Text'], ['files', 'i-file', 'Files'], ['folder', 'i-folder', 'Folder']]
@@ -79,6 +81,17 @@ export function SendCard({ me, uploader, folderPick = supportsFolderPick() }: Pr
     }
   }
 
+  function pickFolder(files: File[]) {
+    setNotice(null)
+    if (!files.length) return setError('This folder is empty — there is nothing to send.')
+    if (files.length > MAX_FOLDER_FILES) {
+      setFolder(null)
+      return setError(`This folder has ${files.length.toLocaleString('en-US')} files. The limit is 5,000 — zip it, or send it in parts.`)
+    }
+    setError(null)
+    setFolder(files)
+  }
+
   const folderName = folder?.[0]?.webkitRelativePath.split('/')[0] ?? ''
   const queue = (
     <UploadQueue jobs={jobs} onRetry={(id) => engine.retry(id)} onCancel={(id) => void engine.cancel(id)}
@@ -98,7 +111,12 @@ export function SendCard({ me, uploader, folderPick = supportsFolderPick() }: Pr
 
       <RecipientPicker me={me} users={users} value={target} onChange={setTarget} />
 
-      {tab === 'text' && <TextForm title={title} body={body} onTitle={setTitle} onBody={setBody} />}
+      {tab === 'text' && (
+        <>
+          <TextForm title={title} body={body} onTitle={setTitle} onBody={setBody} />
+          {queue}
+        </>
+      )}
 
       {tab === 'files' && (
         <div id="p-files">
@@ -123,7 +141,7 @@ export function SendCard({ me, uploader, folderPick = supportsFolderPick() }: Pr
       {tab === 'folder' && (
         <div id="p-folder">
           {folderPick ? (
-            <DropZone folder onFiles={setFolder} />
+            <DropZone folder onFiles={pickFolder} />
           ) : (
             <div className="offline"><Icon name="i-alert" size={18} />This phone can't choose folders. Zip the folder, or use Files to pick several files.</div>
           )}

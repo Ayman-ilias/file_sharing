@@ -25,6 +25,7 @@ export function useItems(section: Section, enabled = true) {
   const alive = (list: Item[]) => list.filter((i) => !tombstones.current.has(i.id))
 
   const refetch = useCallback(async () => {
+    if (!enabled) return // e.g. the global account has no private list
     lastFetch.current = Date.now()
     try {
       const page = await api.get<ItemPage>(url())
@@ -45,7 +46,7 @@ export function useItems(section: Section, enabled = true) {
       setState((s) => (s === 'ready' ? 'ready' : 'error'))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [section])
+  }, [section, enabled])
 
   const loadMore = useCallback(async () => {
     if (!next || loading.current) return

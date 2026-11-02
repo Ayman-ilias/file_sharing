@@ -166,4 +166,18 @@ describe('Lists', () => {
     expect(await screen.findByText('sent-meanwhile.pdf')).toBeInTheDocument()
     expect(pageOne()).toBe(before + 1)
   })
+
+  it('the global account never asks for the private list, also on reconnects', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    server()
+    render(<Lists me={{ ...ayman, is_global: true }} live={live()} />)
+    await screen.findByText('all.txt')
+    act(() => FakeSource.last.fire('open'))
+    act(() => FakeSource.last.fire('error'))
+    await act(() => vi.advanceTimersByTimeAsync(1100))
+    act(() => FakeSource.last.fire('open'))
+    await act(() => vi.advanceTimersByTimeAsync(6000))
+    expect(pageOne()).toBe(0)
+    vi.useRealTimers()
+  })
 })

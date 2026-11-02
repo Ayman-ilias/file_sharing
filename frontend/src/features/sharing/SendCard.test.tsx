@@ -192,4 +192,32 @@ describe('SendCard: files and folders', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Files' }))
     expect(within(document.querySelector('.queue')!).getByText('big.mp4')).toBeInTheDocument()
   })
+
+  it('shows the upload rows on the Text tab too (e.g. "Interrupted" after a reload)', () => {
+    fakeApi({ 'GET /api/users': () => json(200, []) })
+    const up = engine()
+    vi.spyOn(up, 'jobs').mockReturnValue([
+      { id: 'j1', kind: 'file', name: 'report.pdf', size: 100, sent: 0, state: 'failed', reason: 'interrupted', canRetry: false, speed: 0, eta: null },
+    ])
+    render(<SendCard me={globalMe} uploader={up} />)
+    expect(screen.getByRole('button', { name: 'Text' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('report.pdf')).toBeInTheDocument()
+  })
+
+  it('says when a folder has more than 5,000 files, and does not send it', async () => {
+    fakeApi({ 'GET /api/users': () => json(200, []) })
+    const up = engine()
+    const add = vi.spyOn(up, 'addFolder').mockImplementation(() => {})
+    render(<SendCard me={globalMe} uploader={up} folderPick />)
+    await userEvent.click(screen.getByRole('button', { name: 'Folder' }))
+    const files = Array.from({ length: 5001 }, (_, i) => {
+      const f = new File(['x'], `f${i}.txt`)
+      Object.defineProperty(f, 'webkitRelativePath', { value: `big/f${i}.txt` })
+      return f
+    })
+    fireEvent.change(screen.getByLabelText('Choose a folder'), { target: { files } })
+    expect(screen.getByText('This folder has 5,001 files. The limit is 5,000 — zip it, or send it in parts.')).toBeInTheDocument()
+    expect(sendBtn()).toBeDisabled()
+    expect(add).not.toHaveBeenCalled()
+  })
 })
