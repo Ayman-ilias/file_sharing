@@ -90,14 +90,16 @@ Visibility rule, used everywhere: a user sees an item if they are its sender, or
 | `GET /api/items/{id}/download[?inline=1]` | 1 | → 200 with `X-Accel-Redirect: /protected/files/<ab>/<id>` and safe headers (see plan 1, task 8) |
 | `GET /api/items/{id}/entries` | 1 | folder → `[{id, relative_path, size}]` |
 | `GET /api/items/{id}/entries/{entry_id}/download` | 1 | as download |
-| `GET /api/items/{id}/zip` | 2 | streamed zip (stored, Zip64) |
-| `POST /api/uploads` | 2 | `{client_key, name, size, mime, recipient_ids, is_global, target, batch_id?, relative_path?}` → `{upload_id, chunk_size, received}` (an unfinished upload with the same `client_key` is resumed); 413 `too_large`; 507 `disk_full`; 413 `quota_exceeded` (vault). Zero-byte files are allowed |
-| `PUT /api/uploads/{id}/chunks/{n}` | 2 | raw body → 204 |
-| `GET /api/uploads/{id}` | 2 | → `{received: [n…]}` |
-| `POST /api/uploads/{id}/complete` | 2 | → `Item` (share) or `{blob_id}` (vault) |
-| `DELETE /api/uploads/{id}` | 2 | cancel → 204 |
-| `POST /api/batches` / `POST /api/batches/{id}/complete` | 2 | `{name, file_count, recipient_ids, is_global}` → `{batch_id}` (400 `too_many_files` over `MAX_BATCH_FILES` = 5000) / folder `Item` + `failed: [relative_path]` |
-| `GET /api/events` | 2 | SSE: `item.created` `{item}`, `item.deleted` `{id, by: username\|null}` (null = expired); heartbeat every 25 s; the client refetches the list after a reconnect |
+| `GET /api/items/{id}/zip` | 2 ✔ | streamed zip (stored, Zip64, UTF-8 names) with exact `Content-Length`; no Range |
+| `POST /api/uploads` | 2 ✔ | `{client_key, name, size, mime, recipient_ids, is_global, target}` → 201 `{upload_id, chunk_size, received}`, or 200 when resuming (same user + key + size + recipients + is_global, idle < 24 h); 413 `too_large`; 507 `disk_full`; 429 `upload_quota` (20 unfinished uploads / 20 GiB unsent per user); 400 `use_batch_files` if `batch_id`/`relative_path` are sent (folders use the batch routes); `target: vault` → 400 `bad_target` until plan 4. Zero-byte files are allowed |
+| `PUT /api/uploads/{id}/chunks/{n}` | 2 ✔ | raw body of exactly the chunk's length (Content-Length checked, body read with a cap) → 204; 400 `bad_chunk` / `bad_chunk_size`; 409 `already_complete`; 507 `disk_full`; batch files complete themselves on their last chunk |
+| `GET /api/uploads/{id}` | 2 ✔ | → `{received, size, chunk_size, completed, item_id}` |
+| `POST /api/uploads/{id}/complete` | 2 ✔ | → 201 `Item`; a repeat → **200, same item**; 409 `{detail: missing_chunks, missing}`; (vault: `{blob_id}` in plan 4) |
+| `DELETE /api/uploads/{id}` | 2 ✔ | cancel → 204; later chunks → 404 |
+| `POST /api/batches` | 2 ✔ | `{name, file_count, recipient_ids, is_global}` → 201 `{batch_id}`; 400 `empty` / `too_many_files` (> 5000) |
+| `POST /api/batches/{id}/files` | 2 ✔ | `{files: [{relative_path, size, mime, client_key}]}` (≤ 500) → 201 `{uploads: [{relative_path, upload_id, chunk_size, received}]}`; 409 `duplicate_path` / `batch_full` / `batch_closed`; 400 `bad_path` |
+| `POST /api/batches/{id}/complete` | 2 ✔ | → 201 `{item, failed: [relative_path]}`; a repeat → 200, same answer; 400 `empty_batch` |
+| `GET /api/events` | 2 ✔ | SSE: `retry: 3000`, then `item.created` `{item}`, `item.deleted` `{id, by: username\|null}` (null = expired); `: ping` every 25 s; the session is re-checked each heartbeat; ≤ 10 streams per user; slow streams are dropped; the client refetches the list after a reconnect |
 | `GET /api/vault` | 4 | → `{initialized, salt, iterations, wrapped_key, used_bytes, quota_bytes}` |
 | `POST /api/vault/setup` / `PUT /api/vault/key` | 4 | `{salt, iterations, wrapped_key}` → 204; 409 `already_initialized` / 404 `not_initialized` |
 | `POST /api/vault/erase` | 4 | `{confirm: "ERASE"}` → 204 (deletes all vault items, blobs and the key) |
