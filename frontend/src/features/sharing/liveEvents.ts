@@ -24,8 +24,11 @@ type Msg =
   | { t: 'event'; ev: LiveEvent }
   | { t: 'signed-in' }
 
+type LocksLike = { request(name: string, cb: () => Promise<unknown>): Promise<unknown> }
+
 type Deps = {
   source?: (url: string) => SourceLike
+  locks?: LocksLike | null // navigator.locks: the browser picks the leader; no heartbeat to throttle
   channel?: ((name: string) => ChannelLike) | null
   checkSession?: () => Promise<boolean>
   env?: EventTarget
@@ -54,6 +57,8 @@ export class LiveEvents {
   private readonly checkSession: () => Promise<boolean>
   private readonly env: EventTarget
   private readonly random: () => number
+  private readonly locks: LocksLike | null
+  private releaseLock: (() => void) | null = null
   private listeners = new Set<(e: LiveEvent) => void>()
   private channel: ChannelLike | null = null
   private leader = false
@@ -87,6 +92,8 @@ export class LiveEvents {
     this.checkSession = deps.checkSession ?? sessionAlive
     this.env = deps.env ?? (typeof window !== 'undefined' ? window : new EventTarget())
     this.random = deps.random ?? Math.random
+    this.locks = deps.locks !== undefined ? deps.locks
+      : typeof navigator !== 'undefined' && navigator.locks ? (navigator.locks as unknown as LocksLike) : null
   }
 
   subscribe(fn: (e: LiveEvent) => void): () => void {
@@ -105,6 +112,16 @@ export class LiveEvents {
     this.channel = this.makeChannel?.('fs-events') ?? null
     if (!this.channel) return this.lead()
     this.channel.onmessage = (e) => this.onMessage(e.data as Msg)
+    if (this.locks) {
+      // whoever holds the lock leads; the browser hands it on when that tab closes. A hidden,
+      // throttled leader keeps it, so tabs don't take turns every minute.
+      void this.locks.request('fs-events-leader', () => new Promise<void>((release) => {
+        if (!this.running) return release()
+        this.releaseLock = release
+        this.lead()
+      }))
+      return
+    }
     this.channel.postMessage({ t: 'who' })
     this.later(() => { if (!this.leader && Date.now() - this.lastBeat > STARTUP) this.lead() }, STARTUP)
     this.beatTimer = setInterval(() => this.tick(), BEAT)
@@ -124,6 +141,8 @@ export class LiveEvents {
   }
 
   private halt(): void {
+    this.releaseLock?.()
+    this.releaseLock = null
     this.running = false
     this.leader = false
     this.closeSource()

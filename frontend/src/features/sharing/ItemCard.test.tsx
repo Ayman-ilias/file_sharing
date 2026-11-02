@@ -183,4 +183,16 @@ describe('ItemCard: folders', () => {
     await waitFor(() => expect(click).toHaveBeenCalled())
     expect((click.mock.contexts[0] as HTMLAnchorElement).getAttribute('href')).toBe('/api/items/f/zip')
   })
+
+describe('ItemCard: big text stays fast', () => {
+  it('finds links once, not on every re-render', async () => {
+    const linkify = await import('../../lib/linkify')
+    const spy = vi.spyOn(linkify, 'linkify')
+    const item = textItem({ text_body: 'see https://a.io' })
+    const { rerender } = render(<ItemCard item={item} me={ayman} onRemoved={vi.fn()} onToast={vi.fn()} />)
+    rerender(<ItemCard item={item} me={ayman} onRemoved={vi.fn()} onToast={vi.fn()} />)
+    rerender(<ItemCard item={item} me={ayman} onRemoved={vi.fn()} onToast={vi.fn()} />)
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+})
 })

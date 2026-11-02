@@ -65,6 +65,27 @@ test('Sharing on a phone', async ({ browser }) => {
   await compare('phone', await mockupSharing(m, 'Private'), await sharing(a, 'Private'))
 })
 
+test('Global on a phone', async ({ browser }) => {
+  const viewport = { width: 390, height: 844 }
+  const [m, a] = [await browser.newPage({ viewport }), await browser.newPage({ viewport })]
+  await compare('phone-global', await mockupSharing(m, 'Global'), await sharing(a, 'Global'))
+})
+
+test('Login on a phone', async ({ browser }) => {
+  const viewport = { width: 390, height: 844 }
+  const m = await browser.newPage({ viewport })
+  await open(m, MOCKUP)
+  await settle(m)
+  const mock = await shot(m.locator('.lpage'))
+  const a = await browser.newPage({ viewport })
+  await mockApi(a, { me: null })
+  await open(a, '/')
+  await a.getByLabel('Email').fill('ayman')
+  await a.getByLabel('Password').fill('xxxxxxxxxxxxxxx')
+  await settle(a)
+  await compare('phone-login', mock, await shot(a.locator('.lpage')))
+})
+
 test('Login', async ({ browser }) => {
   const m = await browser.newPage()
   await open(m, MOCKUP)

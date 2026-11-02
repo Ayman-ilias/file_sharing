@@ -82,6 +82,7 @@ export function fakeServer({ chunkSize = 4, delay = 2, maxReserved = Infinity } 
     }
     m = path.match(/^\/api\/uploads\/(\w+)$/)
     if (method === 'DELETE' && m) {
+      if (ups.get(m[1])?.done) throw new ApiError(409, 'already_complete') // like the real server
       if (!ups.delete(m[1])) throw new ApiError(404, 'not_found')
       return undefined as T
     }

@@ -197,6 +197,8 @@ export class Uploader {
   private tabId: string
   private owner: number | null = null
   private beat: ReturnType<typeof setInterval> | null = null
+  private lastSaved = ''
+  private moving = new Set<Rec>()
 
   constructor(opts: Options) {
     this.api = opts.api
@@ -247,8 +249,9 @@ export class Uploader {
         this.active.clear()
       }
       this.owner = id
+      this.lastSaved = ''
       this.restore()
-      this.beat ??= setInterval(() => this.persist(), BEAT)
+      this.beat ??= setInterval(() => this.persist(true), BEAT)
     }
     if (this.paused === 'signed_out') this.resume()
     this.wake()
@@ -362,6 +365,12 @@ export class Uploader {
     if (rec.interrupted || rec.state === 'failed') return void this.cancel(id)
     this.recs = this.recs.filter((r) => r !== rec)
     this.changed()
+  }
+
+  /** Cancelled while it was completing: the item exists anyway, so remove it again. */
+  private async unshare(item: Item): Promise<never> {
+    await this.api.send('DELETE', `/api/items/${encodeURIComponent(item.id)}`).catch(() => {})
+    throw new Aborted()
   }
 
   private openUploads(rec: Rec): string[] {
@@ -612,7 +621,9 @@ export class Uploader {
     for (let round = 0; ; round++) {
       await this.sendChunks(rec, task)
       try {
-        return await this.attempt(rec, () => this.api.send<Item>('POST', `/api/uploads/${task.uploadId}/complete`))
+        const item = await this.attempt(rec, () => this.api.send<Item>('POST', `/api/uploads/${task.uploadId}/complete`))
+        if (rec.abort.signal.aborted) await this.unshare(item)
+        return item
       } catch (e) {
         const missing = e instanceof ApiError && e.detail === 'missing_chunks' ? (e.extra.missing as number[]) : null
         if (!missing || round >= 3) throw e
@@ -755,6 +766,7 @@ export class Uploader {
       if (e instanceof ApiError && e.status === 404) throw new BatchGone()
       throw e instanceof ApiError && e.detail === 'empty_batch' ? new Stop(rec.tasks[0]?.reason ?? 'rejected', false) : e
     })
+    if (rec.abort.signal.aborted) await this.unshare(out.item)
     rec.item = out.item
     const failed = new Set(out.failed)
     for (const t of rec.tasks) {
@@ -830,14 +842,18 @@ export class Uploader {
     return sum
   }
 
+  /** Progress events come fast (many per chunk): add up the bytes and tell the UI every 100 ms. */
   private progress(rec: Rec): void {
-    const sent = this.sent(rec)
-    if (sent > rec.lastSent) rec.meter.add(sent - rec.lastSent)
-    rec.lastSent = sent
-    this.dirty = true
-    // progress events come fast: tell the UI at most every 100 ms
+    this.moving.add(rec)
     this.timer ??= setTimeout(() => {
       this.timer = null
+      for (const r of this.moving) {
+        const sent = this.sent(r)
+        if (sent > r.lastSent) r.meter.add(sent - r.lastSent)
+        r.lastSent = sent
+      }
+      this.moving.clear()
+      this.dirty = true
       this.emit()
     }, 100)
   }
@@ -881,7 +897,8 @@ export class Uploader {
   }
 
   /** This tab's unfinished jobs, under its own key (tabs never overwrite each other). */
-  private persist(): void {
+  /** Written when the saved list changes (not per finished file), and every 5 s as a heartbeat. */
+  private persist(heartbeat = false): void {
     if (!this.storage || this.detached || this.owner === null) return
     const jobs: Pending[] = this.recs
       .filter((r) => r.state !== 'done' && !(r.state === 'failed' && !r.canRetry && !r.interrupted))
@@ -892,6 +909,9 @@ export class Uploader {
         uploadId: r.kind === 'file' ? r.tasks[0].uploadId : undefined,
         batchId: r.batchId,
       })
+    const body = JSON.stringify(jobs)
+    if (!heartbeat && body === this.lastSaved) return
+    this.lastSaved = body
     try {
       const saved: Saved = { owner: this.owner, beat: Date.now(), jobs }
       this.storage.setItem(this.storageKey(), JSON.stringify(saved))

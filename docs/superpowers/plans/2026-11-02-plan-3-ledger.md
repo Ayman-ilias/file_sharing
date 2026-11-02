@@ -92,5 +92,10 @@ After review (owner: "solve the issues", 2026-11-02): fixed deferred minors with
 - upload queue now also under the Text tab (ruling 38 reversed): Interrupted rows visible after a reload; SendCard test
 - folder over 5,000 files / empty folder → clear message, nothing sent; SendCard test
 - global account never fetches the private list (also on reconnects); Lists test
-Still deferred: per-event work with 1 MiB text / 5,000 files, hidden-leader flapping, cancel during complete, parity at 390 px for Global/Login.
+Owner: "solve everything" (2026-11-02): the last four fixed, tests first —
+- per-event work: progress adds bytes once per 100 ms (not per XHR event over all files); saved jobs written only when they change (+ 5 s heartbeat); linkify memoized per text; the text counter avoids encoding/copying short texts (isTooLong replaces textBytes)
+- hidden-leader flapping: the live leader is chosen with navigator.locks when available (held until the tab closes; no heartbeat to throttle); heartbeats remain the fallback
+- cancel during complete: an item created after the cancel is deleted again (test proven to fail without the fix)
+- parity at 390 px now also for Global (0.44 %) and Login (0.16 %)
+Nothing from the review is deferred now.
 

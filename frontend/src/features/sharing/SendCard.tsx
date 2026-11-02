@@ -8,7 +8,7 @@ import type { Target, Uploader } from '../uploads/Uploader'
 import { useUploads } from '../uploads/useUploads'
 import { DropZone } from './DropZone'
 import { RecipientPicker } from './RecipientPicker'
-import { MAX_TEXT_BYTES, TextForm, textBytes } from './TextForm'
+import { isTooLong, TextForm } from './TextForm'
 import { UploadQueue } from './UploadQueue'
 
 type Tab = 'text' | 'files' | 'folder'
@@ -49,7 +49,7 @@ export function SendCard({ me, uploader, folderPick = supportsFolderPick() }: Pr
   const sendTo: Target = me.is_global ? { recipientIds: [], isGlobal: true } : target
   const hasTarget = sendTo.isGlobal || sendTo.recipientIds.length > 0
   const hasContent = tab === 'text'
-    ? body.trim() !== '' && textBytes(body) <= MAX_TEXT_BYTES
+    ? body.trim() !== '' && !isTooLong(body)
     : tab === 'files' ? files.length > 0 : !!folder?.length
 
   async function send() {

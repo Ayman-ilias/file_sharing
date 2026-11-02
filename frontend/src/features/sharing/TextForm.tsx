@@ -2,13 +2,24 @@ import { Icon } from '../../icons'
 
 export const MAX_TEXT_BYTES = 1024 ** 2
 
-export const textBytes = (s: string) => new TextEncoder().encode(s).length
+/** Over the 1 MiB server limit (UTF-8)? At most 3 bytes per UTF-16 unit, so short texts skip the encode. */
+export const isTooLong = (s: string) => s.length * 3 > MAX_TEXT_BYTES && new TextEncoder().encode(s).length > MAX_TEXT_BYTES
+
+/** Characters as people count them (an emoji is one), without copying a 1 MiB string. */
+function charCount(s: string): number {
+  let pairs = 0
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i)
+    if (c >= 0xd800 && c <= 0xdbff) pairs++
+  }
+  return s.length - pairs
+}
 
 type Props = { title: string; body: string; onTitle: (v: string) => void; onBody: (v: string) => void }
 
 export function TextForm({ title, body, onTitle, onBody }: Props) {
-  const tooLong = textBytes(body) > MAX_TEXT_BYTES
-  const chars = [...body].length
+  const tooLong = isTooLong(body)
+  const chars = charCount(body)
   return (
     <div id="p-text">
       <div className="field">

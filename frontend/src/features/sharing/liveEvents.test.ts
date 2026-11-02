@@ -36,9 +36,28 @@ function bus() {
 
 const open = () => FakeSource.all.filter((s) => !s.closed)
 
-function tab(channel: (() => unknown) | null, checkSession = vi.fn().mockResolvedValue(true)) {
+/** A minimal navigator.locks: one holder at a time, the next waiter gets it when it is released. */
+function fakeLocks() {
+  const queue: (() => void)[] = []
+  let held = false
+  const next = () => {
+    const go = queue.shift()
+    if (go) { held = true; go() } else held = false
+  }
+  return {
+    request(_name: string, cb: () => Promise<unknown>) {
+      return new Promise((done) => {
+        queue.push(() => { void cb().finally(() => { done(undefined); next() }) })
+        if (!held) next()
+      })
+    },
+  }
+}
+
+function tab(channel: (() => unknown) | null, checkSession = vi.fn().mockResolvedValue(true), locks: unknown = null) {
   const env = new EventTarget()
   const live = new LiveEvents({
+    locks: locks as never,
     source: (url) => new FakeSource(url),
     channel: channel as never,
     checkSession,
@@ -175,5 +194,21 @@ describe('LiveEvents', () => {
     await vi.advanceTimersByTimeAsync(10)
     expect(open()).toHaveLength(1)
     expect(a.live.isLeader()).toBe(true)
+  })
+
+  it('with Web Locks, a quiet (throttled background) leader is never replaced while open', async () => {
+    const channel = bus()
+    const locks = fakeLocks()
+    const a = tab(channel, undefined, locks)
+    await vi.advanceTimersByTimeAsync(10)
+    const b = tab(channel, undefined, locks)
+    await vi.advanceTimersByTimeAsync(30_000) // no beats at all, far past the 3 s takeover
+    expect(a.live.isLeader()).toBe(true)
+    expect(b.live.isLeader()).toBe(false)
+    expect(open()).toHaveLength(1)
+    a.live.stop() // the tab closes: the browser releases its lock
+    await vi.advanceTimersByTimeAsync(10)
+    expect(b.live.isLeader()).toBe(true)
+    expect(open()).toHaveLength(1)
   })
 })
