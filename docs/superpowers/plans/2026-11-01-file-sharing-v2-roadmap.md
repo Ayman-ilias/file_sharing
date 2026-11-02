@@ -99,7 +99,7 @@ Visibility rule, used everywhere: a user sees an item if they are its sender, or
 | `POST /api/batches` | 2 ✔ | `{name, file_count, recipient_ids, is_global}` → 201 `{batch_id}`; 400 `empty` / `too_many_files` (> 5000) |
 | `POST /api/batches/{id}/files` | 2 ✔ | `{files: [{relative_path, size, mime, client_key}]}` (≤ 500) → 201 `{uploads: [{relative_path, upload_id, chunk_size, received}]}`; 409 `duplicate_path` / `batch_full` / `batch_closed`; 400 `bad_path` |
 | `POST /api/batches/{id}/complete` | 2 ✔ | → 201 `{item, failed: [relative_path]}`; a repeat → 200, same answer; 400 `empty_batch` |
-| `GET /api/events` | 2 ✔ | SSE: `retry: 3000`, then `item.created` `{item}`, `item.deleted` `{id, by: username\|null}` (null = expired); `: ping` every 25 s; the session is re-checked each heartbeat; ≤ 10 streams per user; slow streams are dropped; the client refetches the list after a reconnect |
+| `GET /api/events` | 2 ✔ | SSE: `retry: 3000`, then `item.created` `{item}`, `item.deleted` `{id, by: username\|null}` (null = expired); `event: ping` (data `{}`) every 25 s, a named event so the page can see it; the session is re-checked each heartbeat; ≤ 10 streams per user; slow streams are dropped; the client refetches the list after a reconnect |
 | `GET /api/vault` | 4 | → `{initialized, salt, iterations, wrapped_key, used_bytes, quota_bytes}` |
 | `POST /api/vault/setup` / `PUT /api/vault/key` | 4 | `{salt, iterations, wrapped_key}` → 204; 409 `already_initialized` / 404 `not_initialized` |
 | `POST /api/vault/erase` | 4 | `{confirm: "ERASE"}` → 204 (deletes all vault items, blobs and the key) |

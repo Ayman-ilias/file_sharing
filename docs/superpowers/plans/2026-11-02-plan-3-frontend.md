@@ -315,7 +315,7 @@ The review found 7 critical and 17 other issues. Each line names the task it ext
   - Back off 1 s → 30 s with jitter.
   - Refetching page 1 is debounced to once per 5 s.
   - On EventSource `error`, call `/api/auth/me`: 401 → the signed-out flow, no reconnect loop.
-  - A watchdog reconnects if nothing (not even `: ping`) arrives for 60 s.
+  - A watchdog reconnects if nothing (not even the `ping` event) arrives for 60 s. (The backend sends `event: ping`; an SSE comment would be invisible to EventSource.)
   - Refetch on `visibilitychange` → visible and on `online`.
 - **Pagination + live updates:**
   - Live inserts are prepended and never move the cursor.

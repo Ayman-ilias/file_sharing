@@ -105,7 +105,7 @@ async def event_stream(sub: Subscription, still_allowed: Callable[[], Awaitable[
             if not await still_allowed():
                 return
             last_check = time.monotonic()
-            yield ": ping\n\n"
+            yield "event: ping\ndata: {}\n\n"  # a named event: EventSource hides comments
             continue
         if msg is None or sub.dropped:
             return
