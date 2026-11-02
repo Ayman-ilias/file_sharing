@@ -6,6 +6,8 @@ import { Header } from './features/layout/Header'
 import { Nudge } from './features/layout/Nudge'
 import { ProfileDrawer } from './features/layout/ProfileDrawer'
 import { TopTabs, type View } from './features/layout/TopTabs'
+import { SendCard } from './features/sharing/SendCard'
+import { Icon } from './icons'
 
 export default function App() {
   const { me, loading, refresh, logout } = useSession()
@@ -35,6 +37,8 @@ export default function App() {
           {current === 'sharing' ? (
             <div id="view-sharing">
               <Nudge show={!me.is_global && me.uses_shared_password} onSetOwn={() => setProfileOpen(true)} />
+              <div className="notice"><Icon name="i-clock" size={18} />Everything shared here is deleted automatically after 30 days.</div>
+              <SendCard me={me} />
             </div>
           ) : (
             <div id="view-storage" />

@@ -61,3 +61,23 @@ describe('expiresSoon', () => {
     expect(expiresSoon(inDays(-1), now)).toBe('expires today')
   })
 })
+
+describe('upload wording', () => {
+  it('formatProgress puts both numbers in the total unit', async () => {
+    const { formatProgress } = await import('./format')
+    expect(formatProgress(1.04 * 1024 ** 3, 1.8 * 1024 ** 3)).toBe('1.04 GB of 1.80 GB')
+    expect(formatProgress(40.2 * 1024 ** 2, 64.2 * 1024 ** 2)).toBe('40.2 MB of 64.2 MB')
+    expect(formatProgress(0.5 * 1024 ** 2, 2 * 1024 ** 3)).toBe('0.00 GB of 2.00 GB')
+  })
+
+  it('formatSpeed and formatEta', async () => {
+    const { formatSpeed, formatEta } = await import('./format')
+    expect(formatSpeed(84.7 * 1024 ** 2)).toBe('84.7 MB/s')
+    expect(formatEta(9)).toBe('9 s left')
+    expect(formatEta(59)).toBe('59 s left')
+    expect(formatEta(60)).toBe('1 min left')
+    expect(formatEta(130)).toBe('3 min left')
+    expect(formatEta(3900)).toBe('1 h 5 min left')
+    expect(formatEta(7200)).toBe('2 h left')
+  })
+})

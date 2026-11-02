@@ -23,6 +23,8 @@ describe('App shell', () => {
     expect(screen.getByRole('tab', { name: 'My storage' })).toHaveAttribute('aria-selected', 'false')
     expect(screen.getByText(NUDGE)).toBeInTheDocument()
     expect(screen.getByText('ayman@southerniot.net')).toBeInTheDocument()
+    expect(screen.getByText('Everything shared here is deleted automatically after 30 days.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('tab', { name: 'My storage' }))
     expect(screen.getByRole('tab', { name: 'My storage' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.queryByText(NUDGE)).toBeNull() // the nudge belongs to the Sharing view

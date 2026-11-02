@@ -65,3 +65,25 @@ export function expiresSoon(expires: Date | string, now: Date = new Date()): str
   const n = Math.ceil(days)
   return `expires in ${n} ${n === 1 ? 'day' : 'days'}`
 }
+
+/** "1.04 GB of 1.80 GB": both in the total's unit (2 decimals for GB, 1 for smaller). */
+export function formatProgress(sent: number, total: number): string {
+  const unit = formatBytes(total).split(' ')[1] as Unit
+  const digits = unit === 'GB' || unit === 'TB' ? 2 : unit === 'B' ? 0 : 1
+  if (unit === 'B') return `${Math.round(sent)} B of ${Math.round(total)} B`
+  return `${formatBytes(sent, digits, unit)} of ${formatBytes(total, digits, unit)}`
+}
+
+export function formatSpeed(bytesPerSec: number): string {
+  return `${formatBytes(bytesPerSec)}/s`
+}
+
+/** "9 s left", "3 min left", "1 h 5 min left". */
+export function formatEta(seconds: number): string {
+  if (seconds < 60) return `${Math.max(1, Math.ceil(seconds))} s left`
+  const mins = Math.ceil(seconds / 60)
+  if (mins < 60) return `${mins} min left`
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return m ? `${h} h ${m} min left` : `${h} h left`
+}
