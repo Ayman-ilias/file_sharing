@@ -2,21 +2,34 @@ import base64
 import binascii
 import unicodedata
 from datetime import datetime, timedelta
+from pathlib import PurePosixPath
 from typing import Literal
+from urllib.parse import quote
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from pydantic import BaseModel
 from sqlalchemy import Select, and_, exists, or_, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db, utcnow
 from app.deps import current_user
-from app.models import Item, ItemRecipient, User
+from app.models import AuditLog, FolderEntry, Item, ItemRecipient, User
 from app.schemas import ItemOut, ItemPage, TextItemIn, UserRef
+from app.storage import accel_path, remove_stored
 
 router = APIRouter(prefix="/api/items", tags=["items"])
 
 UNTITLED_MAX = 80
+# Shown in the browser only on request (?inline=1); everything else is always a download.
+INLINE_SANDBOXED = {"image/png", "image/jpeg", "image/gif", "image/webp", "video/mp4"}
+INLINE_PLAIN = {"application/pdf"}  # Chromium won't render a sandboxed PDF
+
+
+class EntryOut(BaseModel):
+    id: str
+    relative_path: str
+    size: int
 
 
 def nfc(text: str) -> str:
@@ -137,3 +150,69 @@ def create_text(body: TextItemIn, request: Request, user: User = Depends(current
         db.add(ItemRecipient(item_id=item.id, user_id=r.id))
     db.commit()
     return to_out([item], db)[0]
+
+
+def get_visible(db: Session, user: User, item_id: str) -> Item:
+    item = db.scalars(visible_items_query(user, utcnow()).where(Item.id == item_id)).first()
+    if item is None:
+        raise HTTPException(404, "not_found")  # never reveal that a hidden item exists
+    return item
+
+
+def file_response(storage_id: str, filename: str, mime: str, inline: bool) -> Response:
+    """Empty body + X-Accel-Redirect: nginx streams the bytes (Range, sendfile)."""
+    base_mime = mime.split(";")[0].strip().lower()
+    show_inline = inline and base_mime in INLINE_SANDBOXED | INLINE_PLAIN
+    disposition = "inline" if show_inline else "attachment"
+    headers = {
+        "X-Accel-Redirect": accel_path("files", storage_id),
+        "Content-Disposition": f"{disposition}; filename*=UTF-8''{quote(filename, safe='')}",
+        "Cache-Control": "private, no-store",
+    }
+    if show_inline and base_mime in INLINE_SANDBOXED:
+        headers["Content-Security-Policy"] = "sandbox"
+    media_type = base_mime if show_inline else "application/octet-stream"
+    return Response(content=b"", media_type=media_type, headers=headers)
+
+
+@router.delete("/{item_id}", status_code=204)
+def delete_item(item_id: str, request: Request, user: User = Depends(current_user),
+                db: Session = Depends(get_db)):
+    """Anyone who can see an item may delete it for everyone (owner decision); always audited."""
+    item = get_visible(db, user, item_id)
+    data_dir = request.app.state.settings.data_dir
+    stored = [item.storage_id] + [e.storage_id for e in item.entries]
+    db.add(AuditLog(actor_id=user.id, action="delete", item_id=item.id, item_name=item.name))
+    db.delete(item)
+    db.commit()
+    for sid in stored:
+        remove_stored(data_dir, "files", sid)
+
+
+@router.get("/{item_id}/download")
+def download(item_id: str, inline: bool = False, user: User = Depends(current_user),
+             db: Session = Depends(get_db)):
+    item = get_visible(db, user, item_id)
+    if item.kind != "file" or not item.storage_id:
+        raise HTTPException(400, "not_a_file")
+    return file_response(item.storage_id, item.name, item.mime, inline)
+
+
+@router.get("/{item_id}/entries", response_model=list[EntryOut])
+def list_entries(item_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    item = get_visible(db, user, item_id)
+    if item.kind != "folder":
+        raise HTTPException(400, "not_a_folder")
+    rows = sorted(item.entries, key=lambda e: e.relative_path)
+    return [EntryOut(id=e.id, relative_path=e.relative_path, size=e.size) for e in rows]
+
+
+@router.get("/{item_id}/entries/{entry_id}/download")
+def download_entry(item_id: str, entry_id: str, inline: bool = False,
+                   user: User = Depends(current_user), db: Session = Depends(get_db)):
+    item = get_visible(db, user, item_id)
+    entry = db.get(FolderEntry, entry_id)
+    if entry is None or entry.item_id != item.id:
+        raise HTTPException(404, "not_found")
+    filename = PurePosixPath(entry.relative_path).name
+    return file_response(entry.storage_id, filename, entry.mime, inline)

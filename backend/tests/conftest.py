@@ -105,3 +105,35 @@ def make_client(app, client):
     yield _make
     for c in made:
         c.close()
+
+
+@pytest.fixture
+def make_file_item(db_session, app_settings, make_item):
+    """A shared file whose 3 bytes really exist under DATA_DIR/files (storage_path)."""
+    from uuid import uuid4
+
+    from app.models import User
+    from app.storage import storage_path
+
+    def _make(name="report.pdf", mime="application/pdf", sender=None, recipients=(),
+              is_global=False):
+        if sender is None:
+            sender = db_session.query(User).filter_by(is_global=False).first()
+        sid = uuid4().hex
+        path = storage_path(app_settings.data_dir, "files", sid)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"abc")
+        return make_item(sender, kind="file", name=name, mime=mime, size=3, storage_id=sid,
+                         recipients=recipients, is_global=is_global)
+
+    return _make
+
+
+@pytest.fixture
+def file_item(client, db_session, make_file_item):
+    """One PDF sent by the signed-in `client` user (owner@southerniot.net) to nobody else."""
+    from app.models import User
+
+    login(client, "owner@southerniot.net")
+    owner = db_session.get(User, client.me["id"])
+    return make_file_item(sender=owner)
