@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.config import Settings
 from app.db import get_db, utcnow
 from app.deps import COOKIE_NAME, current_user, set_session_cookie
-from app.models import AuthSession, User
+from app.models import AuditLog, AuthSession, User
 from app.security import client_ip, hash_password, new_session_token, token_hash, verify_password
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -25,6 +25,14 @@ class EmailIn(BaseModel):
 class LoginIn(BaseModel):
     email: str
     password: str
+
+
+class PasswordIn(BaseModel):
+    current_password: str
+    new_password: str
+
+
+MIN_PASSWORD_LEN = 10
 
 
 class Me(BaseModel):
@@ -116,3 +124,21 @@ def logout(request: Request, response: Response, user: User = Depends(current_us
 @router.get("/me", response_model=Me)
 def me(user: User = Depends(current_user)):
     return to_me(user)
+
+
+@router.post("/password", status_code=204)
+def change_password(body: PasswordIn, request: Request, user: User = Depends(current_user),
+                    db: Session = Depends(get_db)):
+    """Set your own login password. Other sessions are signed out; this one stays."""
+    if user.is_global:
+        raise HTTPException(403, "global_account")
+    if not check_password(user, body.current_password, request.app.state.settings):
+        raise HTTPException(401, "bad_credentials")
+    if len(body.new_password) < MIN_PASSWORD_LEN:
+        raise HTTPException(400, "too_short")
+    user.password_hash = hash_password(body.new_password)
+    db.query(AuthSession).filter(
+        AuthSession.user_id == user.id, AuthSession.token_hash != request.state.session_hash
+    ).delete(synchronize_session=False)
+    db.add(AuditLog(actor_id=user.id, action="password_change"))
+    db.commit()
