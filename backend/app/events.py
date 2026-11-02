@@ -3,6 +3,7 @@
 import asyncio
 import json
 import threading
+import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
 
@@ -96,16 +97,22 @@ async def event_stream(sub: Subscription, still_allowed: Callable[[], Awaitable[
                        heartbeat_s: float = 25) -> AsyncIterator[str]:
     """SSE frames. Ends when the subscription is dropped or the session stops being valid."""
     yield "retry: 3000\n\n"
+    last_check = time.monotonic()
     while True:
         try:
             msg = await asyncio.wait_for(sub.queue.get(), timeout=heartbeat_s)
         except TimeoutError:
             if not await still_allowed():
                 return
+            last_check = time.monotonic()
             yield ": ping\n\n"
             continue
         if msg is None or sub.dropped:
             return
+        if time.monotonic() - last_check >= heartbeat_s:  # busy streams are re-checked too
+            if not await still_allowed():
+                return
+            last_check = time.monotonic()
         event, payload = msg
         yield f"event: {event}\ndata: {json.dumps(payload, separators=(',', ':'))}\n\n"
 

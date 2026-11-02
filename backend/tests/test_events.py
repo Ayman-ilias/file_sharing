@@ -141,3 +141,26 @@ def test_expiry_publishes_deleted_by_nobody(db_session, app_settings, make_user,
 
 def test_events_endpoint_needs_session(raw_client):
     assert raw_client.get("/api/events").status_code == 401
+
+
+@pytest.mark.anyio
+async def test_busy_stream_is_still_rechecked():
+    """Review fix: events every few ms must not skip the session check forever."""
+    b = Broker(max_streams_per_user=10)
+    sub = b.subscribe(1, False)
+    checks = []
+
+    async def still_allowed():
+        checks.append(1)
+        return False  # signed out
+
+    gen = event_stream(sub, still_allowed, heartbeat_s=0.05)
+    assert await gen.__anext__() == "retry: 3000\n\n"
+    frames = 0
+    with pytest.raises(StopAsyncIteration):
+        for _ in range(200):
+            b.publish("item.created", {"item": {"id": "x"}}, Audience(True, frozenset()))
+            await asyncio.sleep(0.005)
+            await gen.__anext__()
+            frames += 1
+    assert checks and frames < 200

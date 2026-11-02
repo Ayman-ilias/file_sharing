@@ -87,8 +87,13 @@ async def read_capped(request, limit: int) -> bytes:
 def write_chunk(path: Path, offset: int, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    view = memoryview(data)
     try:
-        os.pwrite(fd, data, offset)
+        while view:  # pwrite may write fewer bytes than asked (e.g. a disk filling up)
+            written = os.pwrite(fd, view, offset)
+            if written <= 0:
+                raise DiskFull
+            view, offset = view[written:], offset + written
     except OSError as e:
         if e.errno == errno.ENOSPC:
             raise DiskFull from e
@@ -136,6 +141,12 @@ async def record_chunk(app: FastAPI, upload_id: str, n: int, data: bytes,
                 up.received = sorted([*up.received, n])
                 up.received_bytes += len(data)
             up.updated_at = utcnow()
+            if up.batch_id:  # a chunk is activity for the whole folder (stale = idle)
+                from app.models import Batch
+
+                batch = db.get(Batch, up.batch_id)
+                if batch is not None:
+                    batch.updated_at = up.updated_at
             db.commit()
             if up.batch_id and len(up.received) == num_chunks(up.size, up.chunk_size):
                 complete_batch_file(db, up, data_dir)

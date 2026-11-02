@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import re
 from datetime import timedelta
 from uuid import uuid4
@@ -49,6 +50,23 @@ class BatchFilesIn(BaseModel):
 
 def _lock(app, batch_id: str) -> asyncio.Lock:
     return app.state.upload_locks.get("batch-" + batch_id)
+
+
+def _unfinished_ids(app, batch_id: str) -> list[str]:
+    with app.state.session_factory() as db:
+        return sorted(db.scalars(select(Upload.id).where(
+            Upload.batch_id == batch_id, Upload.completed_at.is_(None))))
+
+
+@contextlib.asynccontextmanager
+async def _hold_upload_locks(app, batch_id: str):
+    """Take the locks of the batch's unfinished files (sorted, so never deadlocks), so a chunk
+    in the middle of being recorded finishes before we judge or delete that file."""
+    ids = await asyncio.to_thread(_unfinished_ids, app, batch_id)
+    async with contextlib.AsyncExitStack() as stack:
+        for uid in ids:
+            await stack.enter_async_context(app.state.upload_locks.get(uid))
+        yield ids
 
 
 def own_batch(db: Session, user: User, batch_id: str) -> Batch:
@@ -113,9 +131,11 @@ async def register_files(batch_id: str, body: BatchFilesIn, request: Request,
             out, new_bytes, now = [], 0, utcnow()
             for path, f in wanted:
                 old = existing.get(path)
-                if old is not None and old.completed_at is not None:
+                same_file = (old is not None and old.client_key == f.client_key
+                             and old.size == f.size)
+                if old is not None and old.completed_at is not None and not same_file:
                     raise HTTPException(409, "duplicate_path")
-                if old is not None and old.client_key == f.client_key and old.size == f.size:
+                if same_file:  # a retry: resume it, or report it as already done
                     out.append((path, old))
                     continue
                 if old is not None:  # same path, different file: replace the unfinished one
@@ -147,7 +167,7 @@ async def register_files(batch_id: str, body: BatchFilesIn, request: Request,
             return {"uploads": [{"relative_path": p, "upload_id": u.id, "chunk_size": u.chunk_size,
                                  "received": u.received} for p, u in out]}
 
-    async with _lock(app, batch_id):
+    async with _lock(app, batch_id), _hold_upload_locks(app, batch_id):
         result = await asyncio.to_thread(_register)
     return JSONResponse(result, status_code=201)
 
@@ -190,8 +210,10 @@ async def complete_batch(batch_id: str, request: Request, user: User = Depends(c
             db.commit()
             return 201, to_out([item], db, full=True)[0], failed
 
-    async with _lock(app, batch_id):
+    async with _lock(app, batch_id), _hold_upload_locks(app, batch_id) as held:
         code, item, failed = await asyncio.to_thread(_finish)
+    for uid in held:
+        app.state.upload_locks.drop(uid)
     if code == 201:
         notify_created(app, item, audience_for(item.sender.id, item.is_global,
                                                [r.id for r in item.recipients]))

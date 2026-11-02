@@ -85,7 +85,9 @@ def test_duplicate_completed_path_and_replaced_unfinished(pair):
     a, r = pair
     bid = start_batch(a, file_count=2, recipients=[r.me["id"]]).json()["batch_id"]
     _upload_all(a, bid, [("done.txt", b"abcd")])
-    dup = register_files(a, bid, [("done.txt", b"abcd")])
+    other = {"files": [{"relative_path": "done.txt", "size": 9, "mime": "x/y",
+                        "client_key": "different-file"}]}
+    dup = a.post(f"/api/batches/{bid}/files", json=other)  # a DIFFERENT file at a finished path
     assert dup.status_code == 409 and dup.json()["detail"] == "duplicate_path"
     first = register_files(a, bid, [("edit.txt", b"aaaa")]).json()["uploads"][0]
     body = {"files": [{"relative_path": "edit.txt", "size": 8, "mime": "x/y",
@@ -185,3 +187,78 @@ def test_stale_batch_cleanup_removes_completed_files_too(pair, db_session, app_s
     db_session.expire_all()
     assert db_session.get(Batch, bid) is None and not done_file.exists()
     assert db_session.query(Upload).filter_by(batch_id=bid).count() == 0
+
+
+def test_batch_complete_waits_for_a_chunk_in_flight(pair, app_settings, monkeypatch):
+    """Review fix: completing a batch while a file's last chunk is being recorded must not 500
+    or leave an orphan; the file ends up either in the folder or in `failed`, consistently."""
+    import threading
+    import time
+
+    import app.transfers as transfers
+
+    a, r = pair
+    bid = start_batch(a, file_count=2, recipients=[r.me["id"]]).json()["batch_id"]
+    ups = _upload_all(a, bid, [("done.txt", b"abcd")])
+    slow = register_files(a, bid, [("slow.bin", b"abcdefgh")]).json()["uploads"][0]
+    put_chunk(a, slow["upload_id"], 0, b"abcd")
+    real_now = transfers.utcnow
+
+    def slow_now():  # widen the window inside the chunk bookkeeping
+        time.sleep(0.3)
+        return real_now()
+
+    monkeypatch.setattr(transfers, "utcnow", slow_now)
+    results = {}
+
+    def last_chunk():
+        results["put"] = put_chunk(a, slow["upload_id"], 1, b"efgh").status_code
+
+    t = threading.Thread(target=last_chunk)
+    t.start()
+    time.sleep(0.1)  # the chunk is now inside its bookkeeping
+    done = a.post(f"/api/batches/{bid}/complete")
+    t.join()
+    assert done.status_code == 201, done.text
+    assert results["put"] in (204, 404, 409)
+    body = done.json()
+    names_in_folder = done.json()["item"]["file_count"]
+    assert names_in_folder + len(body["failed"]) == 2
+    stored = storage_path(app_settings.data_dir, "files", slow["upload_id"])
+    if "slow.bin" in body["failed"]:
+        assert not stored.exists()  # no orphan
+    else:
+        assert stored.exists() and names_in_folder == 2
+    assert ups  # keeps the first file's registration referenced
+
+
+def test_retrying_registration_after_files_finished_is_not_a_conflict(pair):
+    """Review fix: a lost response + retry (or a page reload mid-folder) must not 409."""
+    a, r = pair
+    bid = start_batch(a, file_count=2, recipients=[r.me["id"]]).json()["batch_id"]
+    files = [("empty.txt", b""), ("a.bin", b"abcdefgh")]
+    first = register_files(a, bid, files).json()["uploads"]
+    by_path = {u["relative_path"]: u for u in first}
+    send_all(a, by_path["a.bin"]["upload_id"], b"abcdefgh", 4)
+    again = register_files(a, bid, files)
+    assert again.status_code == 201, again.text
+    by_path2 = {u["relative_path"]: u for u in again.json()["uploads"]}
+    assert by_path2["a.bin"]["upload_id"] == by_path["a.bin"]["upload_id"]
+    assert by_path2["a.bin"]["received"] == [0, 1] and by_path2["empty.txt"]["received"] == []
+    assert a.post(f"/api/batches/{bid}/complete").json()["item"]["file_count"] == 2
+
+
+def test_chunks_keep_a_batch_alive(pair, db_session, app_settings):
+    """Review fix: a slow single file inside a folder must not be cleaned up mid-transfer."""
+    from app.jobs import run_cleanup
+    from app.models import Batch
+
+    a, r = pair
+    bid = start_batch(a, file_count=1, recipients=[r.me["id"]]).json()["batch_id"]
+    up = register_files(a, bid, [("huge.bin", b"abcdefgh")]).json()["uploads"][0]
+    db_session.get(Batch, bid).updated_at = datetime.now(UTC) - timedelta(hours=25)
+    db_session.commit()
+    put_chunk(a, up["upload_id"], 0, b"abcd")  # still uploading
+    run_cleanup(db_session, app_settings, datetime.now(UTC))
+    db_session.expire_all()
+    assert db_session.get(Batch, bid) is not None

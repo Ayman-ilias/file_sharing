@@ -238,3 +238,30 @@ def test_name_and_mime_are_cleaned(pair, db_session):
     assert up.name == "eviltxt.exe" and up.mime == "application/octet-stream"
     bad = start_upload(a, DATA, recipients=[r.me["id"]], name="a/b", client_key="slash")
     assert bad.status_code == 400 and bad.json()["detail"] == "bad_path"
+
+
+def test_short_pwrite_is_completed_not_ignored(pair, app_settings, monkeypatch):
+    """Review fix: os.pwrite may write fewer bytes than asked; the rest must still be written."""
+    import app.transfers as transfers
+
+    a, r = pair
+    uid = start_upload(a, DATA, recipients=[r.me["id"]]).json()["upload_id"]
+    real = transfers.os.pwrite
+
+    def one_byte_at_a_time(fd, data, offset):
+        return real(fd, bytes(data[:1]), offset)
+
+    monkeypatch.setattr(transfers.os, "pwrite", one_byte_at_a_time)
+    send_all(a, uid, DATA, 4)
+    assert _tmp(app_settings, uid).read_bytes()[:10] == DATA
+
+
+def test_pwrite_writing_nothing_is_disk_full(pair, monkeypatch):
+    import app.transfers as transfers
+
+    a, r = pair
+    uid = start_upload(a, DATA, recipients=[r.me["id"]]).json()["upload_id"]
+    monkeypatch.setattr(transfers.os, "pwrite", lambda fd, data, offset: 0)
+    resp = put_chunk(a, uid, 0, DATA[:4])
+    assert resp.status_code == 507 and resp.json()["detail"] == "disk_full"
+    assert a.get(f"/api/uploads/{uid}").json()["received"] == []
