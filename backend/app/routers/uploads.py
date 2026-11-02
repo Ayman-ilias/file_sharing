@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.db import get_db, utcnow
 from app.deps import current_user
 from app.events import audience_for, notify_created
-from app.models import Item, ItemRecipient, Upload, User
+from app.models import Item, ItemRecipient, Upload, User, VaultKey
 from app.routers.items import resolve_recipients, to_out
 from app.storage import free_bytes, remove_stored
 from app.transfers import (
@@ -28,6 +28,7 @@ from app.transfers import (
     record_chunk,
     reserved_bytes,
 )
+from app.vault import META_ALLOWANCE, VAULT_ABANDONED, quiet_uploads, used_bytes
 
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
 _HEX32 = re.compile(r"[0-9a-f]{32}")
@@ -45,6 +46,8 @@ class UploadIn(BaseModel):
     target: Literal["share", "vault"] = "share"
     batch_id: str | None = None
     relative_path: str | None = None
+    # My storage: which data key encrypted it
+    key_gen: str | None = Field(default=None, max_length=16)
 
 
 class UploadStarted(BaseModel):
@@ -70,10 +73,10 @@ def own_upload(db: Session, user: User, upload_id: str) -> Upload:
 def start(body: UploadIn, request: Request, response: Response,
           user: User = Depends(current_user), db: Session = Depends(get_db)):
     settings = request.app.state.settings
-    if body.target != "share":
-        raise HTTPException(400, "bad_target")  # My storage uploads arrive in plan 4
     if body.batch_id or body.relative_path:
         raise HTTPException(400, "use_batch_files")  # folders register via /api/batches/{id}/files
+    if body.target == "vault":
+        return _start_vault(body, response, user, db, settings)
     if user.is_global and not body.is_global:
         raise HTTPException(403, "global_account")
     try:
@@ -92,6 +95,7 @@ def start(body: UploadIn, request: Request, response: Response,
         select(Upload).where(
             Upload.user_id == user.id, Upload.client_key == body.client_key,
             Upload.size == body.size, Upload.is_global.is_(body.is_global),
+            Upload.target == "share",
             Upload.batch_id.is_(None), Upload.completed_at.is_(None),
             Upload.updated_at > now - timedelta(hours=settings.stale_after_hours),
         ).order_by(Upload.updated_at.desc())
@@ -104,6 +108,44 @@ def start(body: UploadIn, request: Request, response: Response,
             return UploadStarted(upload_id=up.id, chunk_size=up.chunk_size, received=up.received)
     with QUOTA_LOCK:
         return _create(db, user, body, name, key, now, settings)
+
+
+def _start_vault(body: UploadIn, response: Response, user: User, db: Session,
+                 settings) -> UploadStarted:
+    """An encrypted My storage blob. The real name and type stay in the browser (encrypted)."""
+    if user.is_global:
+        raise HTTPException(403, "global_account")
+    if body.recipient_ids or body.is_global:
+        raise HTTPException(400, "bad_target")
+    key = db.get(VaultKey, user.id)
+    if key is None:
+        raise HTTPException(404, "not_initialized")
+    if body.key_gen != key.key_gen:
+        raise HTTPException(409, "key_changed")
+    if body.size > settings.max_file_size:
+        raise HTTPException(413, "too_large")
+    now = utcnow()
+    # a reload abandons the old upload (vault uploads can't resume): free what it held
+    for old in quiet_uploads(db, user.id, VAULT_ABANDONED, now):
+        db.delete(old)
+        remove_stored(settings.data_dir, "tmp", old.id)
+    db.commit()
+    with QUOTA_LOCK:
+        if used_bytes(db, user.id) + body.size + META_ALLOWANCE > settings.vault_quota:
+            raise HTTPException(507, "vault_full")
+        unfinished = db.scalar(select(func.count()).select_from(Upload).where(
+            Upload.user_id == user.id, Upload.completed_at.is_(None), Upload.batch_id.is_(None)))
+        if unfinished >= settings.max_user_uploads:
+            raise HTTPException(429, "upload_quota")
+        if free_bytes(settings.data_dir) - reserved_bytes(db) - body.size < settings.disk_margin:
+            raise HTTPException(507, "disk_full")
+        up = Upload(id=uuid4().hex, user_id=user.id, target="vault", client_key=body.client_key,
+                    name="blob", size=body.size, mime="application/octet-stream",
+                    chunk_size=settings.chunk_size, received=[], received_bytes=0,
+                    recipient_ids=[], is_global=False, created_at=now, updated_at=now)
+        db.add(up)
+        db.commit()
+    return UploadStarted(upload_id=up.id, chunk_size=up.chunk_size, received=[])
 
 
 def _create(db: Session, user: User, body: UploadIn, name: str, key: list[int], now,
@@ -171,11 +213,14 @@ async def cancel(upload_id: str, request: Request, user: User = Depends(current_
     def _delete() -> None:
         with app.state.session_factory() as db:
             up = own_upload(db, user, upload_id)
-            if up.completed_at is not None:
+            # a finished My storage blob that never got its item can still be dropped (frees quota)
+            unattached = up.target == "vault" and up.item_id is None
+            if up.completed_at is not None and not unattached:
                 raise HTTPException(409, "already_complete")
             db.delete(up)
             db.commit()
         remove_stored(app.state.settings.data_dir, "tmp", upload_id)
+        remove_stored(app.state.settings.data_dir, "vault", upload_id)
 
     async with app.state.upload_locks.get(upload_id):
         await asyncio.to_thread(_delete)
@@ -196,6 +241,20 @@ def _create_item(db: Session, up: Upload, settings) -> Item:
     return item
 
 
+def _finish_vault(db: Session, up: Upload, settings) -> tuple[int, dict]:
+    """A My storage blob: stored under vault/, no shared item, no live event."""
+    if up.completed_at is not None:
+        return 200, {"blob_id": up.id, "size": up.size}
+    missing = [n for n in range(num_chunks(up.size, up.chunk_size)) if n not in up.received]
+    if missing:
+        return 409, {"detail": "missing_chunks", "missing": missing}
+    finalize_file(settings.data_dir, up, kind="vault")
+    now = utcnow()
+    up.completed_at, up.storage_id, up.updated_at = now, up.id, now
+    db.commit()
+    return 201, {"blob_id": up.id, "size": up.size}
+
+
 @router.post("/{upload_id}/complete", status_code=201)
 async def complete(upload_id: str, request: Request, user: User = Depends(current_user)):
     """Idempotent: a retry after a dropped connection gets the same item (200)."""
@@ -208,6 +267,8 @@ async def complete(upload_id: str, request: Request, user: User = Depends(curren
             up = own_upload(db, user, upload_id)
             if up.batch_id:
                 raise HTTPException(400, "batch_file")  # batch files complete by themselves
+            if up.target == "vault":
+                return _finish_vault(db, up, settings)
             if up.completed_at is not None:
                 return 200, to_out([db.get(Item, up.item_id)], db, full=True)[0]
             missing = [n for n in range(num_chunks(up.size, up.chunk_size))
@@ -223,6 +284,8 @@ async def complete(upload_id: str, request: Request, user: User = Depends(curren
     if code == 409:
         return JSONResponse(body, status_code=409)
     app.state.upload_locks.drop(upload_id)
+    if isinstance(body, dict):  # a My storage blob: {blob_id, size}
+        return JSONResponse(body, status_code=code)
     if code == 201:
         notify_created(app, body, audience_for(body.sender.id, body.is_global,
                                                [r.id for r in body.recipients]))

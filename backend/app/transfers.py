@@ -192,14 +192,14 @@ def _fsync_dir(path: Path) -> None:
         os.close(fd)
 
 
-def finalize_file(data_dir: Path, upload: Upload) -> None:
+def finalize_file(data_dir: Path, upload: Upload, kind: str = "files") -> None:
     """Move a fully received upload into files/ (same inode, no copy). Safe to call again.
 
     After a crash between the rename and the database commit, the temp file is gone and the
     stored file exists: that counts as done.
     """
     tmp = storage_path(data_dir, "tmp", upload.id)
-    dest = storage_path(data_dir, "files", upload.id)
+    dest = storage_path(data_dir, kind, upload.id)  # "files", or "vault" for My storage
     dest.parent.mkdir(parents=True, exist_ok=True)
     if not tmp.exists():
         if dest.exists():

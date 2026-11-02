@@ -57,3 +57,6 @@ def held_bytes(db: Session, user_id: int, now: datetime) -> int:
 
 def quiet_uploads(db: Session, user_id: int, idle_for: timedelta, now: datetime) -> list[Upload]:
     return list(db.scalars(_unfinished(user_id).where(Upload.updated_at <= now - idle_for)))
+
+
+VAULT_ABANDONED = timedelta(minutes=5)  # a vault upload this quiet was left behind by a reload
