@@ -10,11 +10,14 @@ import { TopTabs, type View } from './features/layout/TopTabs'
 import { Lists } from './features/sharing/Lists'
 import { SendCard } from './features/sharing/SendCard'
 import { useUploads } from './features/uploads/useUploads'
+import { useVault } from './features/vault/useVault'
+import { VaultView } from './features/vault/VaultView'
 import { Icon } from './icons'
 
 export default function App() {
   const { me: signedIn, lost, loading, refresh, logout } = useSession()
   const { jobs, uploader } = useUploads()
+  const vault = useVault()
 
   /** Uploads never outlive the session that started them (the next person could be someone else). */
   async function logOut() {
@@ -47,19 +50,24 @@ export default function App() {
         <div className="wrap">
           <Header me={me} onProfile={() => setProfileOpen(true)} onLogout={() => void logOut()} />
           <TopTabs value={current} onChange={setView} showStorage={showStorage} />
-          {current === 'sharing' ? (
-            <div id="view-sharing">
-              <Nudge show={!me.is_global && me.uses_shared_password} onSetOwn={() => setProfileOpen(true)} />
-              <div className="notice"><Icon name="i-clock" size={18} />Everything shared here is deleted automatically after 30 days.</div>
-              <SendCard me={me} />
-              <Lists me={me} />
+          {/* both views stay mounted, so a half-filled vault form survives switching tabs */}
+          <div id="view-sharing" className={current === 'sharing' ? undefined : 'hidden'}>
+            <Nudge show={!me.is_global && me.uses_shared_password} onSetOwn={() => setProfileOpen(true)} />
+            <div className="notice"><Icon name="i-clock" size={18} />Everything shared here is deleted automatically after 30 days.</div>
+            <SendCard me={me} />
+            <Lists me={me} />
+          </div>
+          {showStorage && (
+            <div id="view-storage" className={current === 'storage' ? undefined : 'hidden'}>
+              <VaultView me={me} onOpenProfile={() => setProfileOpen(true)} />
             </div>
-          ) : (
-            <div id="view-storage" />
           )}
         </div>
       </div>
-      <ProfileDrawer me={me} open={profileOpen && !!signedIn} onClose={() => setProfileOpen(false)} onChanged={() => void refresh()} />
+      <ProfileDrawer me={me} open={profileOpen && !!signedIn} onClose={() => setProfileOpen(false)} onChanged={() => void refresh()}
+        onSetupStorage={() => { setProfileOpen(false); setView('storage') }}
+        vault={{ initialized: vault.status === 'locked' || vault.status === 'open',
+          changePassword: (a, b) => vault.store.changePassword(a, b) }} />
       {!signedIn && (
         <ReSignIn me={me} paused={jobs.filter((j) => j.state === 'paused' || j.state === 'queued').length}
           onSignedIn={() => void refresh()} onSwitchUser={() => void logout()} />

@@ -72,4 +72,34 @@ describe('ProfileDrawer', () => {
     render(<ProfileDrawer me={ayman} open={false} onClose={() => {}} onChanged={() => {}} />)
     expect(screen.queryByRole('dialog')).toBeNull()
   })
+
+  it('before setup: "Set up My storage" opens the tab', async () => {
+    const onSetup = vi.fn()
+    render(<ProfileDrawer me={ayman} open onClose={() => {}} onChanged={() => {}} onSetupStorage={onSetup}
+      vault={{ initialized: false, changePassword: vi.fn() }} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Set up My storage' }))
+    expect(onSetup).toHaveBeenCalled()
+  })
+
+  it('after setup: change the storage password, with its messages', async () => {
+    const change = vi.fn()
+      .mockRejectedValueOnce(Object.assign(new Error('x'), { name: 'WrongPassword' }))
+      .mockResolvedValueOnce(undefined)
+    render(<ProfileDrawer me={ayman} open onClose={() => {}} onChanged={() => {}}
+      vault={{ initialized: true, changePassword: change }} />)
+    expect(screen.queryByText("You haven't set up My storage yet.")).toBeNull()
+    await userEvent.type(screen.getByLabelText('Current storage password'), 'old-storage-pw')
+    await userEvent.type(screen.getByLabelText('New storage password'), 'short')
+    await userEvent.click(screen.getByRole('button', { name: 'Change storage password' }))
+    expect(screen.getByText('Use at least 10 characters.')).toBeInTheDocument()
+    expect(change).not.toHaveBeenCalled()
+    await userEvent.clear(screen.getByLabelText('New storage password'))
+    await userEvent.type(screen.getByLabelText('New storage password'), 'new-storage-pw-1')
+    await userEvent.click(screen.getByRole('button', { name: 'Change storage password' }))
+    expect(await screen.findByText('Current storage password is wrong.')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Change storage password' }))
+    expect(await screen.findByText('Storage password changed.')).toBeInTheDocument()
+    expect(change).toHaveBeenLastCalledWith('old-storage-pw', 'new-storage-pw-1')
+  })
 })
+

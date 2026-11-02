@@ -28,7 +28,8 @@ describe('App shell', () => {
     expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('tab', { name: 'My storage' }))
     expect(screen.getByRole('tab', { name: 'My storage' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.queryByText(NUDGE)).toBeNull() // the nudge belongs to the Sharing view
+    // the nudge belongs to the Sharing view, which stays mounted but hidden
+    expect(screen.getByText(NUDGE).closest('#view-sharing')).toHaveClass('hidden')
   })
 
   it('the global account sees only Sharing, no nudge, no password forms', async () => {
@@ -121,4 +122,21 @@ describe('App shell', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Sign in as someone else' }))
     expect(await screen.findByRole('heading', { name: 'Southern IoT Files' })).toBeInTheDocument()
   })
+
+  it('My storage shows the vault; Profile "Set up My storage" jumps there', async () => {
+    fakeApi({
+      'GET /api/auth/me': () => json(200, ayman),
+      'GET /api/vault': () => json(200, { initialized: false, salt: null, iterations: null, wrapped_key: null, key_gen: null,
+        kdf: 'pbkdf2-sha256', used_bytes: 0, quota_bytes: 209715200, item_count: 0, held_bytes: 0 }),
+    })
+    render(<App />)
+    await userEvent.click(await screen.findByRole('tab', { name: 'My storage' }))
+    expect(await screen.findByText(/Set your own login password first/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('tab', { name: 'Sharing' }))
+    await userEvent.click(screen.getByRole('button', { name: /ayman@southerniot.net/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Set up My storage' }))
+    expect(screen.getByRole('tab', { name: 'My storage' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByRole('dialog', { name: 'Profile' })).toBeNull()
+  })
 })
+

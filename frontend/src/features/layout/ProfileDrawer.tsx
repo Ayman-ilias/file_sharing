@@ -19,6 +19,57 @@ type Props = {
   onClose: () => void
   onChanged: () => void
   onSetupStorage?: () => void
+  /** My storage: whether it exists, and how to change its password (the drawer never sees the key). */
+  vault?: { initialized: boolean; changePassword: (current: string, next: string) => Promise<void> }
+}
+
+function StoragePasswordForm({ change }: { change: (current: string, next: string) => Promise<void> }) {
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [done, setDone] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    setDone(false)
+    if (next.length < MIN_LEN) return setError(MESSAGES.too_short)
+    setBusy(true)
+    setError(null)
+    try {
+      await change(current, next)
+      setCurrent('')
+      setNext('')
+      setDone(true)
+    } catch (err) {
+      const name = (err as Error)?.name
+      setError(name === 'WrongPassword' ? 'Current storage password is wrong.'
+        : name === 'StaleKey' ? 'Changed in another tab — try again.'
+        : "Couldn't change it. Try again.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form className="dr-sec" onSubmit={submit} noValidate>
+      <h3>Storage password</h3>
+      <p>Opens My storage. It never leaves this device, so it cannot be reset. If you forget it, your storage is lost.</p>
+      {done && <div className="ok-msg" role="status"><Icon name="i-check" />Storage password changed.</div>}
+      <div className="field">
+        <label htmlFor="sp-current">Current storage password</label>
+        <input id="sp-current" className="input" type="password" autoComplete="current-password"
+          value={current} onChange={(e) => setCurrent(e.target.value)} />
+      </div>
+      <div className="field">
+        <label htmlFor="sp-new">New storage password</label>
+        <input id="sp-new" className="input" type="password" autoComplete="new-password"
+          value={next} onChange={(e) => setNext(e.target.value)} />
+      </div>
+      {error && <div className="err-msg" role="alert"><Icon name="i-alert" size={14} />{error}</div>}
+      <button className="btn wide" type="submit" disabled={busy}>{busy ? 'Changing…' : 'Change storage password'}</button>
+    </form>
+  )
 }
 
 function LoginPasswordForm({ onChanged }: { onChanged: () => void }) {
@@ -82,7 +133,7 @@ function LoginPasswordForm({ onChanged }: { onChanged: () => void }) {
   )
 }
 
-export function ProfileDrawer({ me, open, onClose, onChanged, onSetupStorage }: Props) {
+export function ProfileDrawer({ me, open, onClose, onChanged, onSetupStorage, vault }: Props) {
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -108,11 +159,15 @@ export function ProfileDrawer({ me, open, onClose, onChanged, onSetupStorage }: 
         ) : (
           <>
             <LoginPasswordForm onChanged={onChanged} />
-            <section className="dr-sec">
-              <h3>Storage password</h3>
-              <p>You haven't set up My storage yet.</p>
-              <button className="btn" onClick={onSetupStorage}><Icon name="i-shield" size={15} />Set up My storage</button>
-            </section>
+            {vault?.initialized ? (
+              <StoragePasswordForm change={vault.changePassword} />
+            ) : (
+              <section className="dr-sec">
+                <h3>Storage password</h3>
+                <p>You haven't set up My storage yet.</p>
+                <button className="btn" onClick={onSetupStorage}><Icon name="i-shield" size={15} />Set up My storage</button>
+              </section>
+            )}
           </>
         )}
       </aside>
