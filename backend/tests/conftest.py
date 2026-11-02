@@ -137,3 +137,18 @@ def file_item(client, db_session, make_file_item):
     login(client, "owner@southerniot.net")
     owner = db_session.get(User, client.me["id"])
     return make_file_item(sender=owner)
+
+
+@pytest.fixture
+def make_vault_item(db_session):
+    from uuid import uuid4
+
+    from app.models import VaultItem
+
+    def _make(user):
+        v = VaultItem(id=uuid4().hex, user_id=user.id, meta_ct="Y2lwaGVy", size_bytes=6)
+        db_session.add(v)
+        db_session.commit()
+        return v
+
+    return _make

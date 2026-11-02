@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings, get_settings
 from app.db import make_engine, make_session_factory, upgrade_db
+from app.jobs import start_cleanup_loop, stop_cleanup_loop
 from app.models import User
 from app.routers import auth, items, users
 from app.security import RateLimiter, SecurityMiddleware
@@ -28,7 +29,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         upgrade_db(settings, engine)
         with app.state.session_factory() as db:
             seed_global_user(db, settings)
+        start_cleanup_loop(app)
         yield
+        await stop_cleanup_loop(app)
         engine.dispose()
 
     app = FastAPI(title="Southern IoT Files", lifespan=lifespan, docs_url=None, redoc_url=None)
