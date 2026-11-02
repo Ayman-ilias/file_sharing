@@ -9,10 +9,10 @@ export const entriesUrl = (id: string) => `/api/items/${enc(id)}/entries`
 export const entryUrl = (id: string, entryId: string) => `/api/items/${enc(id)}/entries/${enc(entryId)}/download`
 
 /** Start a download without leaving the page (the server sends Content-Disposition: attachment). */
-export function startDownload(url: string): void {
+export function startDownload(url: string, name = ''): void {
   const a = document.createElement('a')
   a.href = url
-  a.download = ''
+  a.download = name
   document.body.appendChild(a)
   a.click()
   a.remove()

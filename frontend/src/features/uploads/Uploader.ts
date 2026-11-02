@@ -15,7 +15,7 @@ export type Target = { recipientIds: number[]; isGlobal: boolean }
 export type JobState = 'queued' | 'sending' | 'paused' | 'failed' | 'done'
 export type Reason =
   | 'offline' | 'signed_out' | 'network' | 'too_large' | 'disk_full' | 'upload_quota'
-  | 'file_changed' | 'not_found' | 'interrupted' | 'rejected'
+  | 'file_changed' | 'not_found' | 'interrupted' | 'rejected' | 'vault_full'
 export type FailedFile = { path: string; reason: Reason }
 
 export type Job = {
@@ -31,6 +31,7 @@ export type Job = {
   eta: number | null
   item?: Item
   files?: { total: number; done: number; failed: FailedFile[] }
+  vault: boolean // a My storage upload (shown in My storage, never in Sharing)
 }
 
 export type Storage = {
@@ -98,6 +99,8 @@ type Rec = {
   lastSent: number
   abort: AbortController
   interrupted?: Pending
+  // My storage: the ciphertext goes up, then `finish` saves the encrypted item with its blob id
+  vault?: { keyGen: string; finish: (blobId: string) => Promise<void>; blobId?: string }
 }
 
 type Pending = {
@@ -144,7 +147,7 @@ function toStop(e: unknown): Stop {
   if (isFileError(e)) return new Stop('file_changed')
   if (e instanceof ApiError) {
     if (e.status === 413) return new Stop('too_large')
-    if (e.status === 507) return new Stop('disk_full')
+    if (e.status === 507) return new Stop(e.detail === 'vault_full' ? 'vault_full' : 'disk_full')
     if (e.status === 429) return new Stop('upload_quota')
     if (e.status === 404) return new Stop('not_found')
     if (e.status < 500) return new Stop('rejected')
@@ -310,6 +313,21 @@ export class Uploader {
     this.pump()
   }
 
+  /**
+   * A My storage upload: `cipher` is already encrypted, `label` shows in the row only (the server
+   * stores the blob as "blob"). The job is done when `finish(blobId)` has saved the item.
+   */
+  addVaultFile(cipher: Blob, label: string, keyGen: string, finish: (blobId: string) => Promise<void>): string {
+    const file = new File([cipher], 'blob', { type: 'application/octet-stream' })
+    const rec = this.newRec('file', label, { recipientIds: [], isGlobal: false }, [this.newTask(file, 'blob')], 1)
+    rec.tasks[0].key = `vault:${crypto.randomUUID()}` // never resumes: every encryption differs
+    rec.vault = { keyGen, finish }
+    this.recs.push(rec)
+    this.changed()
+    this.pump()
+    return rec.id
+  }
+
   retry(id: string): void {
     const rec = this.recs.find((r) => r.id === id)
     if (!rec || rec.interrupted) return
@@ -349,6 +367,7 @@ export class Uploader {
     this.pump()
     if (rec.state === 'done') return
     const open = this.openUploads(rec)
+    if (rec.vault?.blobId) open.push(rec.vault.blobId) // finished but not attached: free it
     if (rec.interrupted?.uploadId) open.push(rec.interrupted.uploadId)
     await this.release(open)
   }
@@ -544,14 +563,12 @@ export class Uploader {
   // ---------- one file ----------
 
   private async startUpload(rec: Rec, task: Task): Promise<void> {
-    const started = await this.attempt(rec, () => this.api.send<UploadStarted>('POST', '/api/uploads', {
-      client_key: task.key,
-      name: task.file.name,
-      size: task.file.size,
-      mime: task.file.type || 'application/octet-stream',
-      recipient_ids: rec.target.isGlobal ? [] : rec.target.recipientIds,
-      is_global: rec.target.isGlobal,
-    }))
+    const body = rec.vault
+      ? { client_key: task.key, name: 'blob', size: task.file.size, mime: 'application/octet-stream',
+          recipient_ids: [], is_global: false, target: 'vault', key_gen: rec.vault.keyGen }
+      : { client_key: task.key, name: task.file.name, size: task.file.size, mime: task.file.type || 'application/octet-stream',
+          recipient_ids: rec.target.isGlobal ? [] : rec.target.recipientIds, is_global: rec.target.isGlobal }
+    const started = await this.attempt(rec, () => this.api.send<UploadStarted>('POST', '/api/uploads', body))
     if (rec.abort.signal.aborted) { // cancelled while the request was out: free what it reserved
       void this.release([started.upload_id])
       throw new Aborted()
@@ -575,6 +592,7 @@ export class Uploader {
   }
 
   private async runFile(rec: Rec): Promise<void> {
+    if (rec.vault) return this.runVaultFile(rec, rec.vault)
     const task = rec.tasks[0]
     if (task.verify && (await this.verifySaved(rec, task))) return
     while (true) {
@@ -596,6 +614,38 @@ export class Uploader {
         }
         throw e
       }
+    }
+  }
+
+  /** Upload the ciphertext (once), then attach it; a Retry after a failed attach only re-attaches. */
+  private async runVaultFile(rec: Rec, vault: NonNullable<Rec['vault']>): Promise<void> {
+    const task = rec.tasks[0]
+    if (!vault.blobId) {
+      for (let round = 0; ; round++) {
+        if (!task.uploadId) await this.startUpload(rec, task)
+        await this.sendChunks(rec, task)
+        try {
+          const out = await this.attempt(rec, () =>
+            this.api.send<{ blob_id: string }>('POST', `/api/uploads/${task.uploadId}/complete`))
+          vault.blobId = out.blob_id
+          task.state = 'done'
+          break
+        } catch (e) {
+          const missing = e instanceof ApiError && e.detail === 'missing_chunks' ? (e.extra.missing as number[]) : null
+          if (!missing || round >= 3) throw e
+          for (const n of missing) if (task.received.delete(n)) task.doneBytes -= chunkLen(task.file.size, task.chunkSize, n)
+        }
+      }
+    }
+    if (rec.abort.signal.aborted) throw new Aborted() // cancel() frees the blob
+    try {
+      await this.attempt(rec, () => vault.finish(vault.blobId!))
+    } catch (e) {
+      if (e instanceof Aborted || (e instanceof Stop && e.retryable)) throw e
+      if (e instanceof ApiError && e.status >= 500 && e.status !== 507) throw e
+      void this.release([vault.blobId!]) // the item can't be saved: free the space now
+      vault.blobId = undefined
+      throw e instanceof ApiError && e.detail === 'vault_full' ? new Stop('vault_full') : new Stop('rejected')
     }
   }
 
@@ -874,7 +924,7 @@ export class Uploader {
     const sent = r.state === 'done' && r.kind === 'file' ? size : this.sent(r)
     const sending = r.state === 'sending'
     const job: Job = {
-      id: r.id, kind: r.kind, name: r.name, size, sent, state: r.state, canRetry: r.canRetry,
+      id: r.id, kind: r.kind, name: r.name, size, sent, state: r.state, canRetry: r.canRetry, vault: !!r.vault,
       speed: sending ? r.meter.bytesPerSec() : 0,
       eta: sending ? r.meter.eta(Math.max(0, size - sent)) : null,
     }
@@ -896,12 +946,14 @@ export class Uploader {
     return `${PENDING}${this.tabId}:${this.owner}`
   }
 
-  /** This tab's unfinished jobs, under its own key (tabs never overwrite each other). */
-  /** Written when the saved list changes (not per finished file), and every 5 s as a heartbeat. */
+  /**
+   * This tab's unfinished jobs, under its own key (tabs never overwrite each other). Written when
+   * the list changes and every 5 s as a heartbeat. My storage jobs are never saved (no key after a reload).
+   */
   private persist(heartbeat = false): void {
     if (!this.storage || this.detached || this.owner === null) return
     const jobs: Pending[] = this.recs
-      .filter((r) => r.state !== 'done' && !(r.state === 'failed' && !r.canRetry && !r.interrupted))
+      .filter((r) => !r.vault && r.state !== 'done' && !(r.state === 'failed' && !r.canRetry && !r.interrupted))
       .map((r) => r.interrupted ?? {
         kind: r.kind, name: r.name, target: r.target, totalFiles: r.totalFiles,
         size: r.tasks.reduce((s, t) => s + t.file.size, 0),

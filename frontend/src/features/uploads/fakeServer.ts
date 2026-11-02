@@ -3,6 +3,8 @@ import { ApiError, type PutOptions } from '../../api/client'
 import type { Item } from '../../api/types'
 
 type Up = {
+  vault?: boolean
+  attached?: boolean
   id: string
   key: string
   size: number
@@ -59,6 +61,11 @@ export function fakeServer({ chunkSize = 4, delay = 2, maxReserved = Infinity } 
     const hooked = await hooks.before?.({ method, path, body })
     if (hooked !== undefined) return hooked as T
     const b = body as Record<string, unknown>
+    if (method === 'POST' && path === '/api/uploads' && b.target === 'vault') {
+      const up: Up = { id: nextId(), key: String(b.client_key), size: Number(b.size), received: new Set<number>(), done: false, vault: true }
+      ups.set(up.id, up)
+      return { upload_id: up.id, chunk_size: chunkSize, received: [] } as T
+    }
     if (method === 'POST' && path === '/api/uploads') {
       const old = [...ups.values()].find((u) => u.key === b.client_key && u.size === b.size && !u.done && !u.batchId)
       if (!old && reserved() + Number(b.size) > maxReserved) throw new ApiError(429, 'upload_quota')
@@ -70,6 +77,12 @@ export function fakeServer({ chunkSize = 4, delay = 2, maxReserved = Infinity } 
     if (method === 'POST' && m) {
       const up = ups.get(m[1])
       if (!up) throw new ApiError(404, 'not_found')
+      if (up.vault) {
+        const missing = Array.from({ length: chunks(up.size) }, (_, i) => i).filter((i) => !up.received.has(i))
+        if (missing.length) throw new ApiError(409, 'missing_chunks', { missing })
+        up.done = true
+        return { blob_id: up.id, size: up.size } as T
+      }
       if (!up.done) {
         const missing = Array.from({ length: chunks(up.size) }, (_, i) => i).filter((i) => !up.received.has(i))
         if (missing.length) throw new ApiError(409, 'missing_chunks', { missing })
@@ -82,7 +95,8 @@ export function fakeServer({ chunkSize = 4, delay = 2, maxReserved = Infinity } 
     }
     m = path.match(/^\/api\/uploads\/(\w+)$/)
     if (method === 'DELETE' && m) {
-      if (ups.get(m[1])?.done) throw new ApiError(409, 'already_complete') // like the real server
+      const held = ups.get(m[1])
+      if (held?.done && !(held.vault && !held.attached)) throw new ApiError(409, 'already_complete') // like the real server
       if (!ups.delete(m[1])) throw new ApiError(404, 'not_found')
       return undefined as T
     }

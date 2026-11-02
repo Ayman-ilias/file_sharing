@@ -1,10 +1,11 @@
-import { useCallback, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { Icon } from '../../icons'
 import { formatBytes } from '../../lib/format'
 import { Toasts, type Toast } from '../sharing/Toasts'
 import type { FileMeta, VaultMeta } from './api'
 import { BrokenCard, FileRow, LinkCard, NoteCard, PasswordCard } from './cards'
 import { ItemForm, type FormKind } from './ItemForm'
+import { PhotoGrid } from './PhotoGrid'
 import { Deleted, KeyChanged, StaleVersion, type DecryptedItem, type VaultStore } from './store'
 import { useVault } from './useVault'
 
@@ -17,9 +18,10 @@ type Props = {
   onDownload: (item: DecryptedItem, meta: FileMeta) => void
   onAddFiles: (kind: 'photo' | 'file') => void
   queue?: ReactNode
+  takeStartMessage?: () => string | null // e.g. "1 upload to My storage didn't finish…" after a reload
 }
 
-export function VaultOpen({ store: given, onDownload, onAddFiles, queue }: Props) {
+export function VaultOpen({ store: given, onDownload, onAddFiles, queue, takeStartMessage }: Props) {
   const vault = useVault(given)
   const { store, items, usedBytes, quotaBytes } = vault
   const [kind, setKind] = useState<Kind>('all')
@@ -33,6 +35,11 @@ export function VaultOpen({ store: given, onDownload, onAddFiles, queue }: Props
     setToasts((t) => [...t, { id, text, icon }])
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4000)
   }, [])
+
+  const [startMessage] = useState(() => takeStartMessage?.() ?? null)
+  useEffect(() => {
+    if (startMessage) toast(startMessage, 'i-up')
+  }, [startMessage, toast])
 
   const free = Math.max(0, quotaBytes - usedBytes)
   const full = quotaBytes > 0 && free < FULL_BELOW
@@ -84,6 +91,7 @@ export function VaultOpen({ store: given, onDownload, onAddFiles, queue }: Props
   const passwords = of('password')
   const notesLinks = shown.filter((i) => i.meta?.kind === 'note' || i.meta?.kind === 'link')
   const files = of('file')
+  const photoItems = of('photo')
   const broken = kind === 'all' ? shown.filter((i) => i.broken) : []
 
   return (
@@ -138,6 +146,7 @@ export function VaultOpen({ store: given, onDownload, onAddFiles, queue }: Props
 
       {passwords.length > 0 && <><div className="vgroup">Passwords</div><div className="vgrid">{passwords.map(card)}</div></>}
       {notesLinks.length > 0 && <><div className="vgroup">Notes and links</div><div className="vgrid">{notesLinks.map(card)}</div></>}
+      {photoItems.length > 0 && <><div className="vgroup">Photos</div><PhotoGrid items={photoItems} store={store} onToast={toast} /></>}
       {files.length > 0 && <><div className="vgroup">Files</div><div className="items">{files.map(card)}</div></>}
       {broken.length > 0 && <><div className="vgroup">Can't be opened</div><div className="vgrid">{broken.map(card)}</div></>}
 

@@ -94,7 +94,7 @@ export function SendCard({ me, uploader, folderPick = supportsFolderPick() }: Pr
 
   const folderName = folder?.[0]?.webkitRelativePath.split('/')[0] ?? ''
   const queue = (
-    <UploadQueue jobs={jobs} onRetry={(id) => engine.retry(id)} onCancel={(id) => void engine.cancel(id)}
+    <UploadQueue jobs={jobs.filter((j) => !j.vault)} onRetry={(id) => engine.retry(id)} onCancel={(id) => void engine.cancel(id)}
       onDismiss={(id) => engine.dismiss(id)} />
   )
 

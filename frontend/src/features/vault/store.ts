@@ -2,9 +2,10 @@
 // object's memory: never in React state, storage or logs. Tabs that are open share lock, unlock,
 // activity and changes over BroadcastChannel("fs-vault"); a tab opened later starts locked.
 import { ApiError } from '../../api/client'
-import type { VaultItemOut, VaultMeta, VaultStatus, vaultApi } from './api'
+import type { FileMeta, VaultItemOut, VaultMeta, VaultStatus, vaultApi } from './api'
 import {
-  ITERATIONS, WrongPassword, decryptMeta, deriveKek, encryptMeta, newDataKey, newSalt, unwrapDataKey, wrapDataKey,
+  ITERATIONS, WrongPassword, decryptBlob, decryptMeta, deriveKek, encryptBlob, encryptMeta, newDataKey, newSalt,
+  unwrapDataKey, wrapDataKey,
 } from './crypto'
 
 export { WrongPassword }
@@ -192,6 +193,32 @@ export class VaultStore {
   async encrypt(meta: VaultMeta): Promise<string> {
     if (!this.key) throw new Locked()
     return encryptMeta(meta, this.key)
+  }
+
+  /** [Cancel it]: free space held by this user's vault uploads that went quiet (a reloaded tab). */
+  async releaseHeld(): Promise<void> {
+    await this.api.releaseHeld()
+    await this.refreshUsage()
+  }
+
+  /** The data key's generation, for vault uploads (not secret). */
+  currentKeyGen(): string | null {
+    return this.keyGen
+  }
+
+  async encryptFile(file: Blob): Promise<{ blob: Blob; prefix: string }> {
+    if (!this.key) throw new Locked()
+    return encryptBlob(file, this.key)
+  }
+
+  /** Fetch and decrypt an item's blob. `mime` is what the result is typed as (downloads: octet-stream). */
+  async openBlob(item: DecryptedItem, mime: string): Promise<Blob> {
+    const key = this.key
+    if (!key || !item.meta || (item.meta.kind !== 'file' && item.meta.kind !== 'photo')) throw new Locked()
+    const meta = item.meta as FileMeta
+    const res = await fetch(this.api.blobUrl(item.id), { credentials: 'same-origin' })
+    if (!res.ok) throw new ApiError(res.status, res.status === 404 ? 'not_found' : `http_${res.status}`)
+    return decryptBlob(await res.blob(), key, mime, meta.prefix)
   }
 
   async add(meta: VaultMeta): Promise<DecryptedItem> {

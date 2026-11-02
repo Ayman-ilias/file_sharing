@@ -186,7 +186,7 @@ describe('SendCard: files and folders', () => {
     fakeApi({ 'GET /api/users': () => json(200, []) })
     const up = engine()
     vi.spyOn(up, 'jobs').mockReturnValue([
-      { id: 'j1', kind: 'file', name: 'big.mp4', size: 100, sent: 50, state: 'sending', canRetry: false, speed: 0, eta: null },
+      { id: 'j1', kind: 'file', name: 'big.mp4', size: 100, sent: 50, state: 'sending', canRetry: false, speed: 0, eta: null, vault: false },
     ])
     render(<SendCard me={globalMe} uploader={up} />)
     await userEvent.click(screen.getByRole('button', { name: 'Files' }))
@@ -197,7 +197,7 @@ describe('SendCard: files and folders', () => {
     fakeApi({ 'GET /api/users': () => json(200, []) })
     const up = engine()
     vi.spyOn(up, 'jobs').mockReturnValue([
-      { id: 'j1', kind: 'file', name: 'report.pdf', size: 100, sent: 0, state: 'failed', reason: 'interrupted', canRetry: false, speed: 0, eta: null },
+      { id: 'j1', kind: 'file', name: 'report.pdf', size: 100, sent: 0, state: 'failed', reason: 'interrupted', canRetry: false, speed: 0, eta: null, vault: false },
     ])
     render(<SendCard me={globalMe} uploader={up} />)
     expect(screen.getByRole('button', { name: 'Text' })).toHaveAttribute('aria-pressed', 'true')
@@ -220,4 +220,15 @@ describe('SendCard: files and folders', () => {
     expect(sendBtn()).toBeDisabled()
     expect(add).not.toHaveBeenCalled()
   })
+
+  it('never shows My storage uploads in the Sharing queue', async () => {
+    fakeApi({ 'GET /api/users': () => json(200, []) })
+    const up = engine()
+    vi.spyOn(up, 'jobs').mockReturnValue([
+      { id: 'v1', kind: 'file', name: 'secret.pdf', size: 1, sent: 0, state: 'sending', canRetry: false, speed: 0, eta: null, vault: true },
+    ])
+    render(<SendCard me={globalMe} uploader={up} />)
+    expect(screen.queryByText('secret.pdf')).toBeNull()
+  })
 })
+

@@ -15,6 +15,7 @@ const LABEL: Partial<Record<Reason, string>> = {
   disk_full: 'Server full',
   upload_quota: 'Too many uploads',
   interrupted: 'Interrupted',
+  vault_full: 'Storage full',
 }
 
 function failure(job: Job): [string, string] {
@@ -26,6 +27,7 @@ function failure(job: Job): [string, string] {
     case 'file_changed': return ['File changed or moved — choose it again', 'not sent']
     case 'not_found': return ['The server lost this upload. Retry starts it again', 'not sent']
     case 'interrupted': return ['Interrupted — choose the file again to continue', formatBytes(job.size)]
+    case 'vault_full': return ['Not enough space in My storage', 'not sent']
     default: return ['The server refused this file', 'not sent']
   }
 }

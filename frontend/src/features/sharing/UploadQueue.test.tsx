@@ -6,7 +6,7 @@ import { UploadQueue } from './UploadQueue'
 
 const GB = 1024 ** 3
 const MB = 1024 ** 2
-const base = { kind: 'file' as const, canRetry: false, speed: 0, eta: null }
+const base = { kind: 'file' as const, canRetry: false, speed: 0, eta: null, vault: false }
 const job = (j: Partial<Job> & Pick<Job, 'id' | 'name' | 'size' | 'sent' | 'state'>): Job => ({ ...base, ...j })
 
 function show(jobs: Job[]) {
@@ -47,6 +47,7 @@ describe('UploadQueue', () => {
     ['disk_full', MB, 'Server full', 'The server is low on space. Ask the admin, or try later'],
     ['upload_quota', MB, 'Too many uploads', 'You have too many unfinished uploads. Let some finish, then try again'],
     ['file_changed', MB, 'Failed', 'File changed or moved — choose it again'],
+    ['vault_full', MB, 'Storage full', 'Not enough space in My storage'],
   ] as const)('%s fails without Retry', (reason, size, label, sentence) => {
     show([job({ id: 'a', name: 'x', size, sent: 0, state: 'failed', reason })])
     expect(screen.getByText(label)).toBeInTheDocument()
