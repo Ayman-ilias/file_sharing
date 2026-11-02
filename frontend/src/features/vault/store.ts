@@ -96,6 +96,7 @@ export class VaultStore {
 
   heldKeyForTest = () => this.key
   forceStatusForTest = (status: VaultState) => this.set({ status })
+  forcePatchForTest = (patch: Partial<VaultSnapshot>) => this.set(patch)
 
   // ---------- life cycle ----------
 

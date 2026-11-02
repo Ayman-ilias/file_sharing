@@ -4,6 +4,7 @@ import { AutoLockToast } from './AutoLockToast'
 import type { VaultStore } from './store'
 import { useVault } from './useVault'
 import { VaultLock } from './VaultLock'
+import { VaultOpen } from './VaultOpen'
 import { OwnPasswordGate, VaultSetup } from './VaultSetup'
 
 type Props = { me: Me; store?: VaultStore; onOpenProfile: () => void }
@@ -30,7 +31,8 @@ export function VaultView({ me, store: given, onOpenProfile }: Props) {
   }
   return (
     <>
-      <section id="vault-open" />
+      {/* photos and files arrive in Task 7 (vaultFiles) */}
+      <VaultOpen store={store} onDownload={() => {}} onAddFiles={() => {}} />
       {vault.lockWarning && <AutoLockToast onStay={() => store.touch()} />}
     </>
   )
