@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.config import Settings
 from app.db import utcnow
 from app.events import Audience, audience_for
-from app.models import Batch, FolderEntry, Item, Upload
+from app.models import AuthSession, Batch, FolderEntry, Item, Upload
 from app.storage import remove_stored
 
 log = logging.getLogger("fs.jobs")
@@ -82,6 +82,13 @@ def run_cleanup(db: Session, settings: Settings, now: datetime,
             db.rollback()
             report.errors += 1
             log.exception("cleanup: could not delete stale upload %s", up.id)
+    try:
+        db.query(AuthSession).filter(AuthSession.expires_at <= now).delete()
+        db.commit()
+    except Exception:
+        db.rollback()
+        report.errors += 1
+        log.exception("cleanup: could not purge expired sessions")
     report.orphans_deleted = sweep_orphans(db, settings, idle_since)
     return report
 

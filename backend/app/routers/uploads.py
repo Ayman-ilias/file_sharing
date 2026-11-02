@@ -1,5 +1,6 @@
 import asyncio
 import re
+import threading
 from datetime import timedelta
 from typing import Literal
 from uuid import uuid4
@@ -30,6 +31,8 @@ from app.transfers import (
 
 router = APIRouter(prefix="/api/uploads", tags=["uploads"])
 _HEX32 = re.compile(r"[0-9a-f]{32}")
+# quota and disk checks + the insert must be one step, or parallel starts all pass the check
+QUOTA_LOCK = threading.Lock()
 
 
 class UploadIn(BaseModel):
@@ -95,8 +98,16 @@ def start(body: UploadIn, request: Request, response: Response,
     ).all()
     for up in existing:
         if list(up.recipient_ids) == key:
+            up.updated_at = now  # resuming is activity
+            db.commit()
             response.status_code = 200
             return UploadStarted(upload_id=up.id, chunk_size=up.chunk_size, received=up.received)
+    with QUOTA_LOCK:
+        return _create(db, user, body, name, key, now, settings)
+
+
+def _create(db: Session, user: User, body: UploadIn, name: str, key: list[int], now,
+            settings) -> UploadStarted:
 
     unfinished = db.scalar(select(func.count()).select_from(Upload).where(
         Upload.user_id == user.id, Upload.completed_at.is_(None), Upload.batch_id.is_(None)))
@@ -132,6 +143,8 @@ async def put_chunk(upload_id: str, n: int, request: Request, user: User = Depen
             return chunk_len(up.size, up.chunk_size, n)
 
     expected = await asyncio.to_thread(_expected)
+    if request.headers.get("content-length") is None:
+        raise HTTPException(411, "length_required")  # chunked transfer encoding isn't accepted
     if request.headers.get("content-length") != str(expected):
         raise HTTPException(400, "bad_chunk_size")
     try:

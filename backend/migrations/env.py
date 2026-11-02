@@ -21,6 +21,15 @@ from app.db import Base  # noqa: E402
 
 target_metadata = Base.metadata
 
+
+def render_item(type_, obj, autogen_context):
+    """Write app.db.UTCDateTime as plain sa.DateTime, so migrations never import app code."""
+    from app.db import UTCDateTime
+
+    if type_ == "type" and isinstance(obj, UTCDateTime):
+        return "sa.DateTime()"
+    return False
+
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
@@ -74,7 +83,8 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata, render_as_batch=True
+            connection=connection, target_metadata=target_metadata, render_as_batch=True,
+            render_item=render_item,
         )
 
         with context.begin_transaction():

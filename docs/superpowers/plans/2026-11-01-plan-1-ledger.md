@@ -51,3 +51,5 @@ Final: minor (deferred): concurrent duplicate register can raise IntegrityError 
 Final: minor (deferred): no max length on passwords before Argon2 (CPU cost; limited by rate limiter)
 Final: minor (deferred): expired session rows are never purged
 Final: minor (deferred): migration 0001 imports app.db.UTCDateTime (renaming it later breaks the chain)
+
+Fixed 2026-11-02 (owner: "fix all"): all 8 deferred minors — tests in backend/tests/test_minor_fixes.py (test_p1_*): one Argon2 per login (timing), naive cursor → 400, 500s carry security headers, delete survives unlink errors, race-free register (INSERT … ON CONFLICT DO NOTHING), passwords capped at 1024 chars, expired sessions purged, migrations no longer import app code (render_item writes sa.DateTime; `alembic check` clean).

@@ -35,6 +35,6 @@ Built by plans 1, 2, 4 and 5 in `docs/superpowers/plans/`.
 2. Send the missing chunks: `PUT /api/uploads/{id}/chunks/{n}`, with a body of exactly `chunk_size` bytes (the last one shorter). The browser sends 4 at a time per file. Repeats and any order are fine.
 3. `POST /api/uploads/{id}/complete` → 201 with the item. Calling it again gives 200 with the same item. That's safe after a dropped connection.
 4. **Folders:** `POST /api/batches` → `POST /api/batches/{id}/files` (≤ 500 files per call) → send each file's chunks (a file completes by itself when its last chunk lands) → `POST /api/batches/{id}/complete` → the folder item plus any failed paths.
-5. **Refusals happen before any bytes:** 413 `too_large`, 507 `disk_full`, 429 `upload_quota`.
+5. **Refusals happen before any bytes:** 413 `too_large`, 507 `disk_full`, 429 `upload_quota`. Each chunk needs a `Content-Length` (fetch with a Blob sends one); chunked transfer encoding gets 411 `length_required`.
 6. **Live updates:** `GET /api/events` (SSE) sends `item.created` / `item.deleted` frames and a `: ping` every 25 s. After a reconnect, refetch the list.
 7. Folders download as one zip (`/api/items/{id}/zip`, exact `Content-Length`); single files inside download (and resume) on their own.

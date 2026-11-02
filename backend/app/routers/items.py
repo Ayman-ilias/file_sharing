@@ -1,5 +1,6 @@
 import base64
 import binascii
+import logging
 import unicodedata
 from datetime import datetime, timedelta
 from pathlib import PurePosixPath
@@ -18,9 +19,10 @@ from app.deps import current_user
 from app.events import audience_for, notify_created, notify_deleted
 from app.models import AuditLog, FolderEntry, Item, ItemRecipient, User
 from app.schemas import ItemOut, ItemPage, TextItemIn, UserRef
-from app.storage import accel_path, remove_stored
+from app.storage import accel_path, remove_stored, storage_path
 
 router = APIRouter(prefix="/api/items", tags=["items"])
+log = logging.getLogger("fs.items")
 
 UNTITLED_MAX = 80
 TEXT_PREVIEW_CHARS = 2000  # lists carry a preview; the card asks for the rest on "Show all"
@@ -59,9 +61,12 @@ def decode_cursor(cursor: str) -> tuple[datetime, str]:
     try:
         raw = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode()
         ts, item_id = raw.split("|", 1)
-        return datetime.fromisoformat(ts), item_id
+        when = datetime.fromisoformat(ts)
     except (binascii.Error, UnicodeDecodeError, ValueError):
         raise HTTPException(400, "bad_cursor") from None
+    if when.tzinfo is None:  # cursors we issue are always timezone-aware
+        raise HTTPException(400, "bad_cursor")
+    return when, item_id
 
 
 def to_out(items: list[Item], db: Session, *, full: bool = False) -> list[ItemOut]:
@@ -211,7 +216,10 @@ def delete_item(item_id: str, request: Request, user: User = Depends(current_use
     db.delete(item)
     db.commit()
     for sid in stored:
-        remove_stored(data_dir, "files", sid)
+        try:
+            remove_stored(data_dir, "files", sid)
+        except OSError:  # the row is gone; the orphan sweep removes the file later
+            log.exception("delete: could not remove %s", sid)
     notify_deleted(request.app, item_id, audience, by=user.username)
 
 
@@ -253,7 +261,10 @@ def download_zip(item_id: str, request: Request, user: User = Depends(current_us
     item = get_visible(db, user, item_id)
     if item.kind != "folder":
         raise HTTPException(400, "not_a_folder")
-    zs = folder_zip(item, request.app.state.settings.data_dir)
+    data_dir = request.app.state.settings.data_dir
+    if not all(storage_path(data_dir, "files", e.storage_id).exists() for e in item.entries):
+        raise HTTPException(410, "gone")  # e.g. expired while the page was open
+    zs = folder_zip(item, data_dir)
     headers = {
         "Content-Length": str(len(zs)),
         "Content-Disposition": f"attachment; filename*=UTF-8''{quote(item.name + '.zip', safe='')}",
