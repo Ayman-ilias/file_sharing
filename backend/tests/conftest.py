@@ -73,3 +73,10 @@ def make_item(db_session, app_settings):
         return item
 
     return _make
+
+
+@pytest.fixture
+def raw_client(app):
+    """A client without the X-Requested-With header (a cross-site browser request)."""
+    with TestClient(app) as c:
+        yield c

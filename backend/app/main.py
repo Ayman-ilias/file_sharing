@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from app.config import Settings, get_settings
 from app.db import make_engine, make_session_factory, upgrade_db
+from app.security import SecurityMiddleware
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -19,6 +20,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app = FastAPI(title="Southern IoT Files", lifespan=lifespan, docs_url=None, redoc_url=None)
     app.state.settings = settings
+    app.add_middleware(SecurityMiddleware)
     engine = make_engine(settings)
     app.state.engine = engine
     app.state.session_factory = make_session_factory(engine)
