@@ -65,7 +65,8 @@ describe('LiveEvents', () => {
     es.fire('open')
     es.fire('item.created', { item: { id: 'a' } })
     es.fire('item.deleted', { id: 'a', by: 'rahim' })
-    expect(seen).toEqual([{ type: 'created', item: { id: 'a' } }, { type: 'deleted', id: 'a', by: 'rahim' }])
+    // the first open is announced too: anything sent before the stream opened gets fetched
+    expect(seen).toEqual([{ type: 'reconnect', first: true }, { type: 'created', item: { id: 'a' } }, { type: 'deleted', id: 'a', by: 'rahim' }])
   })
 
   it('one connection for two tabs; the other tab gets the events through the channel', async () => {
@@ -116,7 +117,7 @@ describe('LiveEvents', () => {
     await vi.advanceTimersByTimeAsync(1000)
     const second = open()[0]
     second.fire('open')
-    expect(seen).toEqual([{ type: 'reconnect' }])
+    expect(seen).toEqual([{ type: 'reconnect', first: true }, { type: 'reconnect', first: false }])
   })
 
   it('backs off 1 s → 30 s', async () => {

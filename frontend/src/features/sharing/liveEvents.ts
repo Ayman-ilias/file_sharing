@@ -6,7 +6,7 @@ import type { Item } from '../../api/types'
 export type LiveEvent =
   | { type: 'created'; item: Item }
   | { type: 'deleted'; id: string; by: string | null }
-  | { type: 'reconnect' }
+  | { type: 'reconnect'; first: boolean } // first = the stream just opened for the first time
 
 type SourceLike = {
   addEventListener(type: string, fn: (e: MessageEvent) => void): void
@@ -180,7 +180,8 @@ export class LiveEvents {
     es.addEventListener('open', () => {
       if (this.es !== es) return
       this.failures = 0
-      if (this.everOpened) this.dispatch({ type: 'reconnect' })
+      // also on the first open: items sent between the list load and now were never streamed
+      this.dispatch({ type: 'reconnect', first: !this.everOpened })
       this.everOpened = true
       this.feed()
     })

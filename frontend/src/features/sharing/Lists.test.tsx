@@ -155,4 +155,15 @@ describe('Lists', () => {
     expect(await screen.findByText('all.txt')).toBeInTheDocument()
     expect(screen.queryByRole('tab', { name: /Private/ })).toBeNull()
   })
+
+  it('fetches again as soon as the live stream first opens (catches items sent in between)', async () => {
+    server()
+    render(<Lists me={ayman} live={live()} />)
+    await screen.findByText('mine.pdf')
+    const before = pageOne()
+    priv = [mkItem('p9', { name: 'sent-meanwhile.pdf' }), ...priv]
+    act(() => FakeSource.last.fire('open'))
+    expect(await screen.findByText('sent-meanwhile.pdf')).toBeInTheDocument()
+    expect(pageOne()).toBe(before + 1)
+  })
 })

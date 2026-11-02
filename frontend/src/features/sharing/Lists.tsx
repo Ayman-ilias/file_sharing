@@ -91,6 +91,9 @@ export function Lists({ me, live }: Props) {
       l.private.remove(e.id)
       l.global.remove(e.id)
       if (known && e.by && e.by !== me.username) toast(`${e.by} deleted "${known.name}"`, 'i-trash')
+    } else if (e.first) {
+      if (!me.is_global) void l.private.refetch() // at once: the gap before the stream opened
+      void l.global.refetch()
     } else {
       l.private.refetchSoon()
       l.global.refetchSoon()
