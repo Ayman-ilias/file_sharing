@@ -6,6 +6,9 @@ import {
 } from './crypto'
 import type { VaultMeta } from './api'
 
+// PBKDF2 with 600 000 rounds is slow on purpose; a busy machine needs more than the 5 s default
+vi.setConfig({ testTimeout: 20_000 })
+
 afterEach(() => vi.restoreAllMocks())
 
 const note: VaultMeta = { kind: 'note', title: 'Meeting notes, 28 Oct', text: 'Uttara rollout moves to 12 Nov. ✓ ক' }
