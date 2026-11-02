@@ -34,7 +34,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         await stop_cleanup_loop(app)
         engine.dispose()
 
-    app = FastAPI(title="Southern IoT Files", lifespan=lifespan, docs_url=None, redoc_url=None)
+    app = FastAPI(title="Southern IoT Files", lifespan=lifespan, docs_url=None, redoc_url=None,
+                  openapi_url=None)
     app.state.settings = settings
     app.add_middleware(SecurityMiddleware)
     engine = make_engine(settings)
