@@ -9,7 +9,7 @@ from app.db import make_engine, make_session_factory, upgrade_db
 from app.events import Broker
 from app.jobs import start_cleanup_loop, stop_cleanup_loop
 from app.models import User
-from app.routers import auth, batches, events, items, uploads, users
+from app.routers import auth, batches, events, items, uploads, users, vault
 from app.security import SECURITY_HEADERS, RateLimiter, SecurityMiddleware
 from app.transfers import UploadLocks
 
@@ -57,6 +57,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(uploads.router)
     app.include_router(batches.router)
     app.include_router(events.router)
+    app.include_router(vault.router)
     app.state.broker = Broker(max_streams_per_user=settings.max_streams_per_user)
     app.state.upload_locks = UploadLocks()
 
