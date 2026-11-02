@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     disk_margin: int = 2 * 1024**3
     vault_quota: int = 200 * 1024**2
     trust_x_real_ip: bool = True
+    max_user_reserved: int = 20 * 1024**3  # unsent bytes one user may reserve
+    max_user_uploads: int = 20  # unfinished non-batch uploads per user
+    max_streams_per_user: int = 10
+    stale_after_hours: int = 24  # idle time before an unfinished upload/batch is removed
 
 
 @lru_cache

@@ -65,7 +65,8 @@ No user-supplied name is ever part of a path.
 | `items` | id (uuid hex pk), kind (`file`/`folder`/`text`), name, size (bytes), mime, sender_id, is_global, text_body (nullable), storage_id (nullable), file_count (folders), created_at, expires_at |
 | `item_recipients` | item_id, user_id (pk pair) |
 | `folder_entries` | id, item_id, relative_path, size, storage_id, mime |
-| `uploads` | id, user_id, target (`share`/`vault`), client_key (fingerprint of file + recipients; resume only on an exact match), name, size, mime, chunk_size, received (JSON list of chunk numbers), batch_id, relative_path, recipient_ids (JSON), is_global, created_at, completed_at |
+| `uploads` | id, user_id, target (`share`/`vault`), client_key (fingerprint of file + recipients; resume only on an exact match), name, size, mime, chunk_size, received (JSON list of chunk numbers), received_bytes, batch_id, relative_path, recipient_ids (JSON, sorted), is_global, storage_id (= id once stored), item_id (set on completion: retries return it), created_at, updated_at (idle check), completed_at |
+| `batches` | id, user_id, name, file_count (expected), recipient_ids (JSON, sorted; [] when global), is_global, created_at, updated_at, completed_at, item_id (plan 2) |
 | `audit_log` | id, actor_id, action (`delete`/`password_change`/`vault_erase`/`user_disabled`), item_id, item_name, at |
 | `vault_keys` | user_id (pk), salt (b64), iterations, wrapped_key (b64), updated_at |
 | `vault_items` | id (uuid hex), user_id, meta_ct (b64: encrypted JSON of kind, title, fields), blob_id (nullable), size_bytes (ciphertext), version (int, +1 on each update), created_at, updated_at |

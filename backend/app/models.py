@@ -92,8 +92,29 @@ class Upload(Base):
     relative_path: Mapped[str | None] = mapped_column(String(1024))
     recipient_ids: Mapped[list] = mapped_column(JSON, default=list)
     is_global: Mapped[bool] = mapped_column(Boolean, default=False)
+    received_bytes: Mapped[int] = mapped_column(BigInteger, default=0)
+    storage_id: Mapped[str | None] = mapped_column(String(32))  # set when a batch file completes
+    item_id: Mapped[str | None] = mapped_column(String(32))  # set when completed (idempotent retry)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)  # idle check
     completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class Batch(Base):
+    """A folder being uploaded: its completed files become one folder item."""
+
+    __tablename__ = "batches"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(512))
+    file_count: Mapped[int] = mapped_column(Integer)  # expected number of files
+    recipient_ids: Mapped[list] = mapped_column(JSON, default=list)  # sorted; [] when global
+    is_global: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    item_id: Mapped[str | None] = mapped_column(String(32))
 
 
 class AuditLog(Base):
