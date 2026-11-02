@@ -47,11 +47,14 @@ export function VaultOpen({ store: given, onDownload, onAddFiles, queue, takeSta
 
   async function save(meta: VaultMeta) {
     try {
-      if (form?.item) await store.update(form.item.id, meta)
+      if (form?.item) await store.update(form.item.id, meta, form.item.version) // the version it was opened at
       else await store.add(meta)
       setForm(null)
     } catch (e) {
-      if (e instanceof StaleVersion) toast('Changed in another tab — reloaded.') // the form keeps the text
+      if (e instanceof StaleVersion) {
+        toast('Changed in another tab — reloaded.') // the form keeps the text; saving again overwrites on purpose
+        setForm((f) => f && { ...f, item: store.snapshot().items.find((i) => i.id === f.item?.id) ?? f.item })
+      }
       else if (e instanceof Deleted) { toast('Deleted in another tab.'); setForm(null) }
       else if (e instanceof KeyChanged) setForm(null)
       else if (e instanceof TypeError) toast("You're offline — saved nothing yet.")

@@ -237,12 +237,17 @@ export class VaultStore {
     return item
   }
 
-  async update(id: string, meta: VaultMeta): Promise<DecryptedItem> {
+  /**
+   * Save an edit. `baseVersion` is the version the form was opened with: if another tab saved in
+   * between, the server says stale even though this tab has refreshed (no silent overwrite).
+   */
+  async update(id: string, meta: VaultMeta, baseVersion?: number): Promise<DecryptedItem> {
     const current = this.state.items.find((i) => i.id === id)
     if (!current) throw new Deleted()
+    const version = baseVersion ?? current.version
     const metaCt = await this.encrypt(meta)
     try {
-      const row = await this.guard(() => this.api.update(id, metaCt, current.version, this.keyGen!))
+      const row = await this.guard(() => this.api.update(id, metaCt, version, this.keyGen!))
       const item = await this.decrypt(row, this.key!)
       this.replace(item)
       this.post({ t: 'changed' })

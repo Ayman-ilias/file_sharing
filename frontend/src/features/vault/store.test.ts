@@ -235,6 +235,17 @@ describe('editing', () => {
     expect(b.store.snapshot().items.find((i) => i.id === item.id)?.meta).toMatchObject({ text: 'from A' })
   })
 
+  it('a form opened before another tab saved stays stale even after this tab refreshed (no silent overwrite)', async () => {
+    const { a, b } = await two()
+    const item = await a.store.add(note)
+    await b.store.refresh()
+    const openedAt = b.store.snapshot().items[0].version // b opens the edit form now
+    await a.store.update(item.id, { ...note, text: 'from A' })
+    await b.store.refresh() // the "changed" broadcast makes b refresh while its form is open
+    await expect(b.store.update(item.id, { ...note, text: 'from B' }, openedAt)).rejects.toBeInstanceOf(StaleVersion)
+    expect(b.store.snapshot().items[0].meta).toMatchObject({ text: 'from A' })
+  })
+
   it('saving an item deleted in another tab → Deleted, and it leaves the list', async () => {
     const { a, b } = await two()
     const item = await a.store.add(note)

@@ -188,11 +188,16 @@ describe('forms', () => {
     const id = store.snapshot().items[0].id
     const row = base.srv.items.get(id)!
     base.srv.items.set(id, { ...row, version: row.version + 1 }) // another tab saved first
+    await act(() => store.refresh()) // and this tab already picked the new version up
     await userEvent.type(within(dialog).getByLabelText('Note'), ' and more')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
     expect(await screen.findByText('Changed in another tab — reloaded.')).toBeInTheDocument()
     expect(screen.getByRole('dialog', { name: 'Edit note' })).toBeInTheDocument()
     expect(within(dialog).getByLabelText('Note')).toHaveValue(notes.kind === 'note' ? notes.text + ' and more' : '')
+    // having seen the message, a second Save is a deliberate overwrite of the newer copy
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Edit note' })).toBeNull())
+    expect(store.snapshot().items[0].meta).toMatchObject({ text: (notes.kind === 'note' ? notes.text : '') + ' and more' })
   })
 })
 
