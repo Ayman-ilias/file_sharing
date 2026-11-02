@@ -11,8 +11,8 @@ The spec covers five subsystems. Each gets its own plan, and each plan ends with
 | # | Plan | Delivers | Depends on |
 |---|---|---|---|
 | 1 | [Backend foundation](2026-11-01-plan-1-backend-foundation.md) | Settings, DB and migrations, accounts (register, login, sessions, change password, global account), user list, text items, Private/Global listing, delete with audit, download headers, expiry job, security regression tests | — |
-| 2 | Transfers | Chunked parallel resumable uploads (16 MiB chunks), folders, streaming zip, live events (SSE), disk-space checks | 1 |
-| 3 | Frontend: Sharing, login, profile | The mockup rebuilt in React, wired to plans 1–2: animated background, top tabs, upload card with progress, Private/Global, item cards, photo peek, PDF and links in a new tab, login and register, profile drawer, password nudge; Playwright screenshot checks | 1, 2 |
+| 2 | [Transfers](2026-11-02-plan-2-transfers.md) ✔ | Chunked parallel resumable uploads (16 MiB chunks), folders, streaming zip, live events (SSE), disk-space checks | 1 |
+| 3 | [Frontend: Sharing, login, profile](2026-11-02-plan-3-frontend.md) ✔ | The mockup rebuilt in React, wired to plans 1–2: animated background, top tabs, upload card with progress, Private/Global, item cards, photo peek, PDF and links in a new tab, login and register, profile drawer, password nudge, in-page re-sign-in; Playwright parity (< 1 % pixels vs the mockup) and end-to-end flows | 1, 2 |
 | 4 | My storage | Client-side encrypted vault (AES-256-GCM, PBKDF2-SHA-256 600 000 iterations), storage password, 200 MB quota, 20-minute auto-lock, notes, links, passwords, photos and files | 1, 2, 3 |
 | 5 | Deploy, import, benchmark | nginx and compose, Dockerfiles (non-root, pinned), `import_v1.py`, benchmark through `files.southerneleven.com`, security re-test (rerun the 2026-11-01 attack set), cutover runbook for the owner | 1–4 |
 
