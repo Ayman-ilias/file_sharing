@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { useMedia } from './media'
 
 const BUBBLES = 15
@@ -34,7 +34,7 @@ export function Background() {
   const desktop = useMedia('(hover: hover) and (min-width: 641px)')
   const still = useMedia('(prefers-reduced-motion: reduce)')
   const hidden = useHidden()
-  const bubbles = useMemo(makeBubbles, [])
+  const [bubbles] = useState(makeBubbles) // random once per page
   const showBubbles = desktop && !still
 
   return (

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { describe, expect, test } from 'vitest'
+import { describe, expect, it, test } from 'vitest'
 
 const root = resolve(import.meta.dirname, '../../..')
 const read = (p: string) => readFileSync(resolve(root, p), 'utf8')
@@ -29,5 +29,19 @@ describe('the design CSS is copied from the approved mockup', () => {
     const missing = [...used].filter((id) => !sprite.includes(`id="${id}"`))
     expect(used.size).toBeGreaterThan(10)
     expect(missing).toEqual([])
+  })
+})
+
+describe('extra.css (rules the static mockup cannot show)', () => {
+  const extra = readFileSync(resolve(import.meta.dirname, 'extra.css'), 'utf8')
+
+  it('only adds touch and focus behaviour, never restyles the design', () => {
+    const selectors = [...extra.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{[^{}]*\}/g)]
+      .map((m) => m[1].trim()).filter((s) => !s.startsWith('@media'))
+    expect(selectors.sort()).toEqual(['.drop:focus-visible, .inside [role="button"]:focus-visible', '.item.photo .peek', '.opens'].sort())
+  })
+
+  it('shows hover-only hints on touch screens', () => {
+    expect(extra).toMatch(/@media \(hover: none\)\s*\{[^}]*\.opens\s*\{\s*opacity:\s*1/)
   })
 })

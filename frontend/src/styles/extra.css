@@ -1,0 +1,10 @@
+/* Behaviour the static mockup can't show (ledgered in plan 3, Task 8). Nothing here restyles it. */
+
+/* phones and tablets: hints that were hover-only are always shown (states.html §10) */
+@media (hover: none) {
+  .opens { opacity: 1; }
+  .item.photo .peek { display: none; } /* a tap opens the full-screen viewer instead */
+}
+
+/* keyboard focus on the clickable drop zone and "+N more" */
+.drop:focus-visible, .inside [role="button"]:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }

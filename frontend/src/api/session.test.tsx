@@ -44,4 +44,18 @@ describe('useSession', () => {
     window.removeEventListener('fs:signed-in', seen)
     expect(seen).toHaveBeenCalledTimes(2)
   })
+
+  it('keeps the lost user when the session ends by itself, not after Log out', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) =>
+      String(input).endsWith('/logout') ? json(204) : json(200, me))
+    const { result } = renderHook(() => useSession())
+    await waitFor(() => expect(result.current.me).not.toBeNull())
+    act(() => { window.dispatchEvent(new Event('fs:signed-out')) })
+    expect(result.current.lost?.username).toBe('rahim')
+    await act(() => result.current.refresh())
+    expect(result.current.me?.username).toBe('rahim')
+    expect(result.current.lost).toBeNull()
+    await act(() => result.current.logout())
+    expect(result.current.lost).toBeNull()
+  })
 })
