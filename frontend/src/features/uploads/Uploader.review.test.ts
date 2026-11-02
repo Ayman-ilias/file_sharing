@@ -251,3 +251,22 @@ describe('review #8: a stalled chunk is retried', () => {
     expect(srv.stats.puts).toHaveLength(2)
   })
 })
+
+describe('review minor: Retry after "upload lost" starts a new upload', () => {
+  it('does not keep using the dead upload id', async () => {
+    const srv = fakeServer()
+    const { up, env } = tab(srv)
+    signIn(env, 1)
+    const { ApiError } = await import('../../api/client')
+    let lose = true
+    srv.hooks.before = ({ method }) => {
+      if (method === 'PUT' && lose) { srv.ups.clear(); throw new ApiError(404, 'not_found') }
+    }
+    await up.addFiles([file('a', 4)], PEOPLE)
+    await until(() => up.jobs()[0].state === 'failed')
+    expect(up.jobs()[0].reason).toBe('not_found')
+    lose = false
+    up.retry(up.jobs()[0].id)
+    await until(() => up.jobs()[0].state === 'done')
+  })
+})
