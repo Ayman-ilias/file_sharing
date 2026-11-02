@@ -146,3 +146,37 @@ async def record_chunk(app: FastAPI, upload_id: str, n: int, data: bytes,
         except DiskFull:
             raise HTTPException(507, "disk_full") from None
         await asyncio.to_thread(_mark)
+
+
+def _fsync_dir(path: Path) -> None:
+    fd = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def finalize_file(data_dir: Path, upload: Upload) -> None:
+    """Move a fully received upload into files/ (same inode, no copy). Safe to call again.
+
+    After a crash between the rename and the database commit, the temp file is gone and the
+    stored file exists: that counts as done.
+    """
+    tmp = storage_path(data_dir, "tmp", upload.id)
+    dest = storage_path(data_dir, "files", upload.id)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if not tmp.exists():
+        if dest.exists():
+            return
+        if upload.size == 0:
+            tmp.parent.mkdir(parents=True, exist_ok=True)
+            tmp.touch()
+        else:
+            raise FileNotFoundError(f"upload {upload.id}: no data on disk")
+    with open(tmp, "r+b") as fh:
+        if os.fstat(fh.fileno()).st_size != upload.size:
+            fh.truncate(upload.size)
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(tmp, dest)
+    _fsync_dir(dest.parent)

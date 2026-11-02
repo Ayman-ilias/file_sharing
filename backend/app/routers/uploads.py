@@ -5,19 +5,22 @@ from typing import Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db import get_db, utcnow
 from app.deps import current_user
-from app.models import Upload, User
-from app.routers.items import resolve_recipients
+from app.events import notify_created
+from app.models import Item, ItemRecipient, Upload, User
+from app.routers.items import resolve_recipients, to_out
 from app.storage import free_bytes, remove_stored
 from app.transfers import (
     chunk_len,
     clean_mime,
     clean_name,
+    finalize_file,
     num_chunks,
     read_capped,
     recipient_key,
@@ -164,3 +167,49 @@ async def cancel(upload_id: str, request: Request, user: User = Depends(current_
     async with app.state.upload_locks.get(upload_id):
         await asyncio.to_thread(_delete)
     app.state.upload_locks.drop(upload_id)
+
+
+def _create_item(db: Session, up: Upload, settings) -> Item:
+    """The shared file record for a finished upload (storage id = upload id)."""
+    now = utcnow()
+    item = Item(id=uuid4().hex, kind="file", name=up.name, size=up.size, mime=up.mime,
+                sender_id=up.user_id, is_global=up.is_global, storage_id=up.id,
+                created_at=now, expires_at=now + timedelta(days=settings.item_ttl_days))
+    db.add(item)
+    for uid in up.recipient_ids:
+        db.add(ItemRecipient(item_id=item.id, user_id=uid))
+    up.completed_at, up.item_id, up.storage_id, up.updated_at = now, item.id, up.id, now
+    db.commit()
+    return item
+
+
+@router.post("/{upload_id}/complete", status_code=201)
+async def complete(upload_id: str, request: Request, user: User = Depends(current_user)):
+    """Idempotent: a retry after a dropped connection gets the same item (200)."""
+    check_id(upload_id)
+    app = request.app
+    settings = app.state.settings
+
+    def _finish():
+        with app.state.session_factory() as db:
+            up = own_upload(db, user, upload_id)
+            if up.batch_id:
+                raise HTTPException(400, "batch_file")  # batch files complete by themselves
+            if up.completed_at is not None:
+                return 200, to_out([db.get(Item, up.item_id)], db, full=True)[0]
+            missing = [n for n in range(num_chunks(up.size, up.chunk_size))
+                       if n not in up.received]
+            if missing:
+                return 409, {"detail": "missing_chunks", "missing": missing}
+            finalize_file(settings.data_dir, up)
+            item = _create_item(db, up, settings)
+            return 201, to_out([item], db, full=True)[0]
+
+    async with app.state.upload_locks.get(upload_id):
+        code, body = await asyncio.to_thread(_finish)
+    if code == 409:
+        return JSONResponse(body, status_code=409)
+    app.state.upload_locks.drop(upload_id)
+    if code == 201:
+        notify_created(app, body.id)
+    return JSONResponse(body.model_dump(mode="json"), status_code=code)

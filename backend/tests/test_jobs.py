@@ -69,10 +69,13 @@ def test_cleanup_removes_stale_uploads_only(db_session, app_settings, make_user)
     recent_tmp = _write(app_settings.data_dir, "tmp", recent_id)
     common = dict(user_id=u.id, target="share", client_key="k", name="f", size=1, mime="x",
                   chunk_size=16)
+    # staleness = idle time (updated_at), since plan 2
     db_session.add_all([
-        Upload(id=stale_id, created_at=NOW - timedelta(hours=25), **common),
-        Upload(id=recent_id, created_at=NOW - timedelta(hours=1), **common),
-        Upload(id=done_id, created_at=NOW - timedelta(days=3),
+        Upload(id=stale_id, created_at=NOW - timedelta(hours=25),
+               updated_at=NOW - timedelta(hours=25), **common),
+        Upload(id=recent_id, created_at=NOW - timedelta(hours=1),
+               updated_at=NOW - timedelta(hours=1), **common),
+        Upload(id=done_id, created_at=NOW - timedelta(days=3), updated_at=NOW - timedelta(days=3),
                completed_at=NOW - timedelta(days=3), **common),
     ])
     db_session.commit()

@@ -12,19 +12,19 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.db import utcnow
-from app.models import Item, Upload
+from app.models import FolderEntry, Item, Upload
 from app.storage import remove_stored
 
 log = logging.getLogger("fs.jobs")
 
 CLEANUP_EVERY_S = 3600
-STALE_UPLOAD_AFTER = timedelta(hours=24)
 
 
 @dataclass
 class CleanupReport:
     items_deleted: int = 0
     uploads_deleted: int = 0
+    orphans_deleted: int = 0
     errors: int = 0
 
 
@@ -44,10 +44,9 @@ def run_cleanup(db: Session, settings: Settings, now: datetime) -> CleanupReport
             report.errors += 1
             log.exception("cleanup: could not delete expired item %s", item.id)
 
+    idle_since = now - timedelta(hours=settings.stale_after_hours)
     stale = db.scalars(
-        select(Upload).where(
-            Upload.completed_at.is_(None), Upload.created_at <= now - STALE_UPLOAD_AFTER
-        )
+        select(Upload).where(Upload.completed_at.is_(None), Upload.updated_at <= idle_since)
     ).all()
     for up in stale:
         try:
@@ -59,7 +58,30 @@ def run_cleanup(db: Session, settings: Settings, now: datetime) -> CleanupReport
             db.rollback()
             report.errors += 1
             log.exception("cleanup: could not delete stale upload %s", up.id)
+    report.orphans_deleted = sweep_orphans(db, settings, idle_since)
     return report
+
+
+def sweep_orphans(db: Session, settings: Settings, older_than: datetime) -> int:
+    """Delete files in tmp/ and files/ that no row references (e.g. after a crash)."""
+    known_files = set(db.scalars(select(Item.storage_id).where(Item.storage_id.is_not(None))))
+    known_files |= set(db.scalars(select(FolderEntry.storage_id)))
+    known_files |= set(db.scalars(select(Upload.storage_id).where(Upload.storage_id.is_not(None))))
+    known_tmp = set(db.scalars(select(Upload.id).where(Upload.completed_at.is_(None))))
+    cutoff = older_than.timestamp()
+    removed = 0
+    for kind, known in (("files", known_files), ("tmp", known_tmp)):
+        root = settings.data_dir / kind
+        if not root.is_dir():
+            continue
+        for path in root.glob("*/*"):
+            try:
+                if path.name not in known and path.stat().st_mtime < cutoff:
+                    path.unlink()
+                    removed += 1
+            except OSError:
+                log.exception("orphan sweep: could not check %s", path)
+    return removed
 
 
 def _cleanup_once(app: FastAPI) -> CleanupReport:
