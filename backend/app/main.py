@@ -7,8 +7,9 @@ from app.config import Settings, get_settings
 from app.db import make_engine, make_session_factory, upgrade_db
 from app.jobs import start_cleanup_loop, stop_cleanup_loop
 from app.models import User
-from app.routers import auth, items, users
+from app.routers import auth, items, uploads, users
 from app.security import RateLimiter, SecurityMiddleware
+from app.transfers import UploadLocks
 
 
 def seed_global_user(db: Session, settings: Settings) -> None:
@@ -45,6 +46,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth.router)
     app.include_router(users.router)
     app.include_router(items.router)
+    app.include_router(uploads.router)
+    app.state.upload_locks = UploadLocks()
 
     @app.get("/api/health")
     def health() -> dict:

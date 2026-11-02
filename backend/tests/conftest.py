@@ -152,3 +152,27 @@ def make_vault_item(db_session):
         return v
 
     return _make
+
+
+@pytest.fixture
+def chunk4(monkeypatch):
+    """Tiny 4-byte chunks so multi-chunk files stay small. Request it BEFORE `client`."""
+    monkeypatch.setenv("CHUNK_SIZE", "4")
+
+
+def start_upload(c, data: bytes = b"", *, name="f.bin", recipients=(), is_global=False,
+                 client_key=None, mime="application/octet-stream", **extra):
+    body = {"client_key": client_key or f"k-{name}-{len(data)}", "name": name, "size": len(data),
+            "mime": mime, "recipient_ids": list(recipients), "is_global": is_global,
+            "target": "share", **extra}
+    return c.post("/api/uploads", json=body)
+
+
+def put_chunk(c, upload_id: str, n: int, data: bytes):
+    return c.put(f"/api/uploads/{upload_id}/chunks/{n}", content=data)
+
+
+def send_all(c, upload_id: str, data: bytes, chunk_size: int):
+    for n in range((len(data) + chunk_size - 1) // chunk_size):
+        r = put_chunk(c, upload_id, n, data[n * chunk_size:(n + 1) * chunk_size])
+        assert r.status_code == 204, r.text
