@@ -9,7 +9,7 @@ from urllib.parse import quote
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import Select, and_, exists, or_, select
 from sqlalchemy.orm import Session
@@ -182,8 +182,11 @@ def get_visible(db: Session, user: User, item_id: str) -> Item:
     return item
 
 
-def file_response(storage_id: str, filename: str, mime: str, inline: bool) -> Response:
-    """Empty body + X-Accel-Redirect: nginx streams the bytes (Range, sendfile)."""
+def file_response(settings, storage_id: str, filename: str, mime: str, inline: bool) -> Response:
+    """Empty body + X-Accel-Redirect: nginx streams the bytes (Range, sendfile).
+
+    With SERVE_FILES (dev and e2e, no nginx) the bytes come from here, with the same headers.
+    """
     base_mime = mime.split(";")[0].strip().lower()
     show_inline = inline and base_mime in INLINE_SANDBOXED | INLINE_PLAIN
     disposition = "inline" if show_inline else "attachment"
@@ -195,6 +198,10 @@ def file_response(storage_id: str, filename: str, mime: str, inline: bool) -> Re
     if show_inline and base_mime in INLINE_SANDBOXED:
         headers["Content-Security-Policy"] = "sandbox"
     media_type = base_mime if show_inline else "application/octet-stream"
+    if settings.serve_files:
+        del headers["X-Accel-Redirect"]
+        path = storage_path(settings.data_dir, "files", storage_id)
+        return FileResponse(path, media_type=media_type, headers=headers)
     return Response(content=b"", media_type=media_type, headers=headers)
 
 
@@ -224,12 +231,13 @@ def delete_item(item_id: str, request: Request, user: User = Depends(current_use
 
 
 @router.get("/{item_id}/download")
-def download(item_id: str, inline: bool = False, user: User = Depends(current_user),
+def download(item_id: str, request: Request, inline: bool = False,
+             user: User = Depends(current_user),
              db: Session = Depends(get_db)):
     item = get_visible(db, user, item_id)
     if item.kind != "file" or not item.storage_id:
         raise HTTPException(400, "not_a_file")
-    return file_response(item.storage_id, item.name, item.mime, inline)
+    return file_response(request.app.state.settings, item.storage_id, item.name, item.mime, inline)
 
 
 @router.get("/{item_id}/entries", response_model=list[EntryOut])
@@ -242,14 +250,14 @@ def list_entries(item_id: str, user: User = Depends(current_user), db: Session =
 
 
 @router.get("/{item_id}/entries/{entry_id}/download")
-def download_entry(item_id: str, entry_id: str, inline: bool = False,
+def download_entry(item_id: str, entry_id: str, request: Request, inline: bool = False,
                    user: User = Depends(current_user), db: Session = Depends(get_db)):
     item = get_visible(db, user, item_id)
     entry = db.get(FolderEntry, entry_id)
     if entry is None or entry.item_id != item.id:
         raise HTTPException(404, "not_found")
     filename = PurePosixPath(entry.relative_path).name
-    return file_response(entry.storage_id, filename, entry.mime, inline)
+    return file_response(request.app.state.settings, entry.storage_id, filename, entry.mime, inline)
 
 
 @router.get("/{item_id}/zip")

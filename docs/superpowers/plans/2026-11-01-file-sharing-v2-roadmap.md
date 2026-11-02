@@ -55,6 +55,7 @@ No user-supplied name is ever part of a path.
 | `DISK_MARGIN` | `2147483648` (2 GiB) | Free space that must remain after an upload |
 | `VAULT_QUOTA` | `209715200` (200 MiB) | My storage limit per user (ciphertext bytes) |
 | `TRUST_X_REAL_IP` | `true` | Read the client IP from nginx's `X-Real-IP`; nginx sets it from `CF-Connecting-IP` only for `TRUSTED_PROXIES` |
+| `SERVE_FILES` | `false` | Dev and e2e only (no nginx): the API sends file bytes itself instead of `X-Accel-Redirect`. Keep `false` in production |
 
 ### Tables (`app/models.py`)
 

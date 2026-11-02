@@ -7,7 +7,7 @@ backend-lint:
 	cd backend && uv run ruff check .
 
 backend-dev:
-	cd backend && COOKIE_SECURE=false uv run uvicorn app.main:create_app --factory --reload --port 8000 --no-server-header
+	cd backend && COOKIE_SECURE=false SERVE_FILES=true uv run uvicorn app.main:create_app --factory --reload --port 8000 --no-server-header
 
 .PHONY: frontend-dev frontend-test frontend-build frontend-design
 frontend-dev:
@@ -21,3 +21,7 @@ frontend-build:
 
 frontend-design:  ## re-copy CSS + icons from docs/design after a design change
 	cd frontend && node scripts/extract-design.mjs
+
+.PHONY: frontend-e2e
+frontend-e2e:
+	cd frontend && npx playwright test
