@@ -1,0 +1,36 @@
+import { renderHook, waitFor, act } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { useSession } from './session'
+
+const me = { id: 1, email: 'rahim@southerniot.net', username: 'rahim', is_global: false, uses_shared_password: true }
+const json = (status: number, body?: unknown) =>
+  new Response(body === undefined ? null : JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
+
+afterEach(() => vi.restoreAllMocks())
+
+describe('useSession', () => {
+  it('gives me = null on 401', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(401, { detail: 'not_signed_in' }))
+    const { result } = renderHook(() => useSession())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.me).toBeNull()
+  })
+
+  it('loads me once, and logout clears it', async () => {
+    const f = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(json(200, me)).mockResolvedValueOnce(json(204))
+    const { result } = renderHook(() => useSession())
+    await waitFor(() => expect(result.current.me?.username).toBe('rahim'))
+    await act(() => result.current.logout())
+    expect(result.current.me).toBeNull()
+    expect(f).toHaveBeenCalledTimes(2)
+    expect(f.mock.calls[1][0]).toBe('/api/auth/logout')
+  })
+
+  it('clears me when any call reports signed-out', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, me))
+    const { result } = renderHook(() => useSession())
+    await waitFor(() => expect(result.current.me).not.toBeNull())
+    act(() => { window.dispatchEvent(new Event('fs:signed-out')) })
+    expect(result.current.me).toBeNull()
+  })
+})
