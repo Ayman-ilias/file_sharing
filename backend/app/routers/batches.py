@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db, utcnow
 from app.deps import current_user
-from app.events import notify_created
+from app.events import audience_for, notify_created
 from app.models import Batch, FolderEntry, Item, ItemRecipient, Upload, User
 from app.routers.items import resolve_recipients, to_out
 from app.storage import free_bytes, remove_stored
@@ -193,5 +193,6 @@ async def complete_batch(batch_id: str, request: Request, user: User = Depends(c
     async with _lock(app, batch_id):
         code, item, failed = await asyncio.to_thread(_finish)
     if code == 201:
-        notify_created(app, item.id)
+        notify_created(app, item, audience_for(item.sender.id, item.is_global,
+                                               [r.id for r in item.recipients]))
     return JSONResponse({"item": item.model_dump(mode="json"), "failed": failed}, status_code=code)

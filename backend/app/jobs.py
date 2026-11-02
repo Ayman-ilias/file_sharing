@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -12,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings
 from app.db import utcnow
+from app.events import Audience, audience_for
 from app.models import Batch, FolderEntry, Item, Upload
 from app.storage import remove_stored
 
@@ -28,17 +30,23 @@ class CleanupReport:
     errors: int = 0
 
 
-def run_cleanup(db: Session, settings: Settings, now: datetime) -> CleanupReport:
+def run_cleanup(db: Session, settings: Settings, now: datetime,
+                on_deleted: Callable[[str, Audience], None] | None = None) -> CleanupReport:
     """Each row in its own try/commit: one failure is counted, logged, and retried next run."""
     report = CleanupReport()
     expired = db.scalars(select(Item).where(Item.expires_at <= now)).all()
     for item in expired:
         try:
+            item_id = item.id
+            audience = audience_for(item.sender_id, item.is_global,
+                                    [r.user_id for r in item.recipients])
             for sid in [item.storage_id] + [e.storage_id for e in item.entries]:
                 remove_stored(settings.data_dir, "files", sid)
             db.delete(item)
             db.commit()
             report.items_deleted += 1
+            if on_deleted is not None:
+                on_deleted(item_id, audience)
         except Exception:
             db.rollback()
             report.errors += 1
@@ -101,8 +109,11 @@ def sweep_orphans(db: Session, settings: Settings, older_than: datetime) -> int:
 
 
 def _cleanup_once(app: FastAPI) -> CleanupReport:
+    from app.events import notify_deleted
+
     with app.state.session_factory() as db:
-        return run_cleanup(db, app.state.settings, utcnow())
+        return run_cleanup(db, app.state.settings, utcnow(),
+                           on_deleted=lambda iid, aud: notify_deleted(app, iid, aud, by=None))
 
 
 async def _loop(app: FastAPI) -> None:

@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db, utcnow
 from app.deps import current_user
+from app.events import audience_for, notify_created, notify_deleted
 from app.models import AuditLog, FolderEntry, Item, ItemRecipient, User
 from app.schemas import ItemOut, ItemPage, TextItemIn, UserRef
 from app.storage import accel_path, remove_stored
@@ -163,7 +164,10 @@ def create_text(body: TextItemIn, request: Request, user: User = Depends(current
     for r in recipients:
         db.add(ItemRecipient(item_id=item.id, user_id=r.id))
     db.commit()
-    return to_out([item], db, full=True)[0]
+    out = to_out([item], db, full=True)[0]
+    audience = audience_for(user.id, item.is_global, [r.id for r in recipients])
+    notify_created(request.app, out, audience)
+    return out
 
 
 def get_visible(db: Session, user: User, item_id: str) -> Item:
@@ -201,12 +205,14 @@ def delete_item(item_id: str, request: Request, user: User = Depends(current_use
     """Anyone who can see an item may delete it for everyone (owner decision); always audited."""
     item = get_visible(db, user, item_id)
     data_dir = request.app.state.settings.data_dir
+    audience = audience_for(item.sender_id, item.is_global, [r.user_id for r in item.recipients])
     stored = [item.storage_id] + [e.storage_id for e in item.entries]
     db.add(AuditLog(actor_id=user.id, action="delete", item_id=item.id, item_name=item.name))
     db.delete(item)
     db.commit()
     for sid in stored:
         remove_stored(data_dir, "files", sid)
+    notify_deleted(request.app, item_id, audience, by=user.username)
 
 
 @router.get("/{item_id}/download")

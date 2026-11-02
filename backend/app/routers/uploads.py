@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db, utcnow
 from app.deps import current_user
-from app.events import notify_created
+from app.events import audience_for, notify_created
 from app.models import Item, ItemRecipient, Upload, User
 from app.routers.items import resolve_recipients, to_out
 from app.storage import free_bytes, remove_stored
@@ -211,5 +211,6 @@ async def complete(upload_id: str, request: Request, user: User = Depends(curren
         return JSONResponse(body, status_code=409)
     app.state.upload_locks.drop(upload_id)
     if code == 201:
-        notify_created(app, body.id)
+        notify_created(app, body, audience_for(body.sender.id, body.is_global,
+                                               [r.id for r in body.recipients]))
     return JSONResponse(body.model_dump(mode="json"), status_code=code)
