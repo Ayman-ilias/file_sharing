@@ -87,3 +87,14 @@ export function formatEta(seconds: number): string {
   const m = mins % 60
   return m ? `${h} h ${m} min left` : `${h} h left`
 }
+
+/** My storage "Edited …": "2 min ago", "today", "yesterday", "3 days ago" (within a week), then "Oct 12". */
+export function editedAgo(date: Date | string, now: Date = new Date()): string {
+  const d = toDate(date)
+  if (now.getTime() - d.getTime() < 3_600_000) return relativeTime(d, now)
+  const days = daysAgo(d, now)
+  if (days <= 0) return 'today'
+  if (days === 1) return 'yesterday'
+  if (days < 7) return `${days} days ago`
+  return shortDate(d, now)
+}

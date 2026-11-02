@@ -50,7 +50,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     engine = make_engine(settings)
     app.state.engine = engine
     app.state.session_factory = make_session_factory(engine)
-    app.state.login_limiter = RateLimiter(limit=10, window_s=60)
+    app.state.login_limiter = RateLimiter(limit=settings.login_rate_limit, window_s=60)
     app.include_router(auth.router)
     app.include_router(users.router)
     app.include_router(items.router)

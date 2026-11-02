@@ -91,8 +91,7 @@ describe('lock screen', () => {
   it('shows the honest text (no claim that the server admin can never read it)', async () => {
     const { store } = await locked()
     view(store)
-    expect(screen.getByText(/so the database, backups and colleagues can't read them/)).toBeInTheDocument()
-    expect(screen.getByText(/It can't protect you if the server itself is taken over/)).toBeInTheDocument()
+    expect(screen.getByText(/The database, backups and colleagues can't read them; a hacked server could\./)).toBeInTheDocument()
     expect(screen.queryByText(/Not even the server admin/)).toBeNull()
   })
 

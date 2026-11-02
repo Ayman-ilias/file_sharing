@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     max_user_uploads: int = 20  # unfinished non-batch uploads per user
     max_streams_per_user: int = 10
     stale_after_hours: int = 24  # idle time before an unfinished upload/batch is removed
+    # registrations and failed logins per client IP per minute (an office behind one IP shares it)
+    login_rate_limit: int = 10
     # dev and e2e only (no nginx in front): send file bytes from Python instead of X-Accel-Redirect
     serve_files: bool = False
 

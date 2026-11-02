@@ -29,7 +29,8 @@ frontend/
 │       ├── auth/               LoginPage (sign in, register), ReSignIn (session ended mid-work)
 │       ├── layout/             Background, Header, TopTabs, Nudge, ProfileDrawer
 │       ├── uploads/            Uploader engine (chunked, parallel, resumable, survives reload) + useUploads
-│       └── sharing/            SendCard, RecipientPicker, UploadQueue, Lists, ItemCard, live events
+│       ├── sharing/            SendCard, RecipientPicker, UploadQueue, Lists, ItemCard, live events
+│       └── vault/              My storage: crypto, VaultStore (key in memory), screens, encrypted photos/files
 └── e2e/                        parity.spec.ts (vs mockup.html), flows.spec.ts (real backend), mock-api.ts
 ```
 
@@ -40,4 +41,22 @@ frontend/
 - Uploads: chunk size from the server, 2 files × 4 chunks (folders: small files 6 at a time), backoff 1–16 s then Retry, pause offline or signed out, resume after a reload by re-picking the file.
 - One live connection per browser (tabs elect a leader over `BroadcastChannel`).
 
-Built by plan 3 (`docs/superpowers/plans/2026-11-02-plan-3-frontend.md`); My storage is plan 4.
+## My storage encryption (`src/features/vault/crypto.ts`)
+
+- **Keys:**
+  - The storage password (NFC-normalised) goes through PBKDF2-SHA-256 with 600 000 rounds and a 16-byte salt, giving a key-encryption key.
+  - A random AES-256-GCM data key is wrapped with it.
+  - The data key, once unwrapped, is non-extractable and lives only in `VaultStore`'s memory.
+- **Changing the password** re-wraps the same data key.
+- **Formats** (all versioned):
+  - wrapped key and item metadata: `0x01 ‖ iv(12) ‖ AES-GCM(…)`; metadata uses AAD `fsv1:meta`;
+  - files: `"FSV1" ‖ uint32 segment size ‖ 8-byte nonce prefix ‖ segments of 4 MiB`, with IV = prefix ‖ segment index and AAD `fsv1:blob:<i>:<end|more>`. Truncated, reordered, extended or foreign blobs fail. The metadata stores the prefix, so blobs can't be swapped between items.
+- **Behaviour:**
+  - auto-lock after 20 minutes idle (a deadline, also checked after sleep), with a 60 s warning;
+  - lock on `pagehide`;
+  - lock, unlock, activity, erase and password changes are shared between open tabs (`BroadcastChannel("fs-vault")`, per user);
+  - a newly opened tab starts locked.
+- **Uploads:** files are checked against the free space first, then encrypted one at a time just before their own upload. They are never saved for after a reload. Photos carry a small encrypted JPEG thumbnail.
+- **Limits** (spec §3.7, shown on the lock screen): this protects the database, backups and colleagues. It does not protect against someone who takes over the server and changes the app it sends.
+
+Built by plans 3 and 4 (`docs/superpowers/plans/2026-11-02-plan-3-frontend.md`, `2026-11-02-plan-4-my-storage.md`).

@@ -23,5 +23,5 @@ make frontend-dev     # http://localhost:5180
 make backend-test frontend-test frontend-e2e
 ```
 
-Status: plans 1–3 done (backend, transfers, Sharing frontend). Next: plan 4 (My storage), plan 5 (deploy).
+Status: plans 1–4 done (backend, transfers, Sharing frontend, My storage). Next: plan 5 (deploy, import from v1, benchmark).
 

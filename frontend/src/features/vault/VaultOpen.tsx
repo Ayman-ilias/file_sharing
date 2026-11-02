@@ -101,7 +101,7 @@ export function VaultOpen({ store: given, onDownload, onAddFiles, queue, takeSta
     <section id="vault-open">
       <div className="card vault-head">
         <div className="vh-top">
-          <div><b>My storage</b><span className="enc"><Icon name="i-shield" size={14} />Encrypted, only you can see this</span>
+          <div><b>My storage</b><span className="enc"><Icon name="i-shield" size={13} />Encrypted, only you can see this</span>
             <span className="autolock">Locks itself after 20 minutes without activity</span></div>
           <button type="button" className="btn" onClick={() => store.lock('manual')}><Icon name="i-lock" size={15} />Lock</button>
         </div>

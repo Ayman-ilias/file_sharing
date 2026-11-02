@@ -1,4 +1,10 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { defineConfig } from '@playwright/test'
+
+// one throwaway data folder per run, shared with the tests through the environment
+process.env.E2E_DATA_DIR ??= mkdtempSync(join(tmpdir(), 'fs-e2e-'))
 
 // Parity runs against `vite preview` with /api mocked in the browser; the flows use a real backend
 // on :8765 with a throwaway data folder (e2e/backend.sh).
@@ -18,6 +24,7 @@ export default defineConfig({
   webServer: [
     {
       command: 'bash e2e/backend.sh',
+      env: { E2E_DATA_DIR: process.env.E2E_DATA_DIR! },
       url: 'http://127.0.0.1:8765/api/health',
       reuseExistingServer: false,
       timeout: 120_000,

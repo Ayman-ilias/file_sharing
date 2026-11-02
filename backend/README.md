@@ -38,3 +38,29 @@ Built by plans 1, 2, 4 and 5 in `docs/superpowers/plans/`.
 5. **Refusals happen before any bytes:** 413 `too_large`, 507 `disk_full`, 429 `upload_quota`. Each chunk needs a `Content-Length` (fetch with a Blob sends one); chunked transfer encoding gets 411 `length_required`.
 6. **Live updates:** `GET /api/events` (SSE) sends `item.created` / `item.deleted` frames and an `event: ping` (data `{}`) every 25 s; a named event, because EventSource never shows SSE comments, so the page can run a watchdog. After a reconnect, refetch the list.
 7. Folders download as one zip (`/api/items/{id}/zip`, exact `Content-Length`); single files inside download (and resume) on their own.
+
+## My storage (plan 4)
+
+The server keeps **ciphertext only**: no titles, names, mime types, passwords or note text. Everything is encrypted in the browser (`frontend/src/features/vault/crypto.ts`).
+
+| Route | What it does |
+|---|---|
+| `GET /api/vault` | `{initialized, salt, iterations, wrapped_key, key_gen, kdf, used_bytes, quota_bytes, item_count, held_bytes}` |
+| `POST /api/vault/setup` | Stores salt, iterations (600 000 – 5 000 000) and the wrapped data key. Needs the user's **own login password** (403 `own_password_required` while still on the shared one). A second setup → 409 |
+| `PUT /api/vault/key` | Re-wraps the same data key under a new storage password. Needs `previous_wrapped_key` (another tab changed it → 409 `stale_key`). `key_gen` stays the same |
+| `POST /api/vault/erase` | `{confirm: "ERASE", login_password}`. Deletes items, blobs, vault uploads and the key, and is audited. It takes the upload locks, so a racing complete leaves nothing behind |
+| `GET/POST /api/vault/items`, `PUT/DELETE /api/vault/items/{id}` | Item writes carry `key_gen`: a write from an old key (the vault was erased and set up again elsewhere) → 409 `key_changed`. `PUT` carries `version` (stale → 409 with `current`). At most 5 000 items |
+| `GET /api/vault/items/{id}/blob` | The ciphertext, as an opaque attachment (X-Accel-Redirect, or the bytes themselves with `SERVE_FILES`) |
+| `POST /api/vault/release-held` | "Cancel it": frees this user's vault uploads that have had no chunk for 30 s or more |
+
+**Vault uploads** use the normal chunk protocol with `target: "vault"` and `key_gen`. The server stores them as `name="blob"`, `mime=application/octet-stream`. `complete` returns `{blob_id, size}` and creates no shared item and no live event. The item is attached afterwards with `POST /api/vault/items {meta_ct, blob_id}`.
+
+**Quota** (`VAULT_QUOTA`, 200 MiB) counts:
+- items (blob + `meta_ct` length);
+- finished but unattached blobs, plus a 64 KiB metadata allowance each;
+- what unfinished vault uploads still have to send, plus the same allowance.
+
+Space is freed as follows:
+- **New upload starts:** this user's vault uploads with no chunk for 5 minutes are dropped first (a reload abandons them; vault uploads never resume across reloads).
+- **After 24 h:** unattached blobs are swept.
+- **Edits:** only the growth of the metadata counts.

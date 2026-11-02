@@ -206,3 +206,17 @@ def test_vault_needs_csrf_header(client, make_client):
     bare.cookies = client.cookies
     r = bare.post("/api/vault/setup", json=key_body(), headers={"X-Requested-With": ""})
     assert r.status_code == 403
+
+
+def test_login_rate_limit_is_a_setting(monkeypatch, tmp_path):
+    """Launch day: a whole office behind one public IP registers at once. Ops can raise it."""
+    monkeypatch.setenv("SHARED_PASSWORD", TEST_SHARED_PASSWORD)
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "d"))
+    monkeypatch.setenv("LOGIN_RATE_LIMIT", "40")
+    from app.config import Settings
+    from app.main import create_app
+
+    assert Settings(_env_file=None).login_rate_limit == 40
+    assert create_app(Settings(_env_file=None)).state.login_limiter.limit == 40
+    monkeypatch.delenv("LOGIN_RATE_LIMIT")
+    assert Settings(_env_file=None).login_rate_limit == 10

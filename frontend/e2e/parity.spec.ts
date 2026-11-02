@@ -2,7 +2,8 @@
 import { writeFileSync } from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
 import { difference, localFonts, MOCKUP, settle, shot } from './fixtures'
-import { mockApi, NOW } from './mock-api'
+import { ayman, mockApi, NOW } from './mock-api'
+import { VAULT_PASSWORD, vaultFixture } from './vault-fixture'
 
 const LIMIT = 0.01
 
@@ -132,4 +133,80 @@ test('long names and many recipients never scroll sideways on a phone', async ({
   await page.getByText(/colleague0, colleague1/).waitFor()
   const wide = await page.evaluate(() => document.documentElement.scrollWidth)
   expect(wide).toBeLessThanOrEqual(390)
+})
+
+// ---------- My storage ----------
+
+const ownPassword = { ...ayman, uses_shared_password: false }
+
+async function appVault(page: Page, unlock: boolean) {
+  await mockApi(page, { me: ownPassword, vault: await vaultFixture(NOW) })
+  await open(page, '/')
+  await page.getByRole('tab', { name: 'My storage' }).click()
+  await page.getByLabel('Storage password').fill(VAULT_PASSWORD)
+  if (unlock) {
+    await page.getByRole('button', { name: 'Unlock' }).click()
+    await page.locator('#vault-open .ph').first().waitFor()
+    await page.waitForFunction(() => [...document.querySelectorAll<HTMLElement>('#vault-open .ph')].every((t) => t.style.backgroundImage))
+  }
+  await settle(page)
+}
+
+/**
+ * The lock card's copy was changed on purpose (plan 4 decision D2: "Not even the server admin can
+ * read them" contradicts spec §3.7). Put the decided copy into the mockup, so layout, fonts and
+ * spacing are still compared pixel for pixel.
+ */
+async function decidedCopy(page: Page) {
+  await page.evaluate(() => {
+    const card = document.querySelector('#vault-locked')!
+    card.querySelector('p')!.textContent = 'Your notes, links, passwords and photos are encrypted on this device before they are saved. The database, backups and colleagues can\'t read them; a hacked server could.'
+    card.querySelector('small')!.innerHTML = 'Forgot it? It cannot be reset. <button style="color:var(--navy);font-weight:600;font-size:inherit">Erase My storage and start again</button>'
+  })
+}
+
+async function mockupVault(page: Page, unlock: boolean) {
+  await open(page, MOCKUP)
+  await decidedCopy(page)
+  await page.locator('.tt[data-view="storage"]').click()
+  if (unlock) await page.locator('#vault-locked .primary').click()
+  await settle(page)
+}
+
+/** The mockup's lock screen is the one after an idle lock: get there for real (unlock, then 21 idle minutes). */
+async function appVaultIdleLocked(page: Page) {
+  await localFonts(page)
+  await page.clock.install({ time: NOW })
+  await mockApi(page, { me: ownPassword, vault: await vaultFixture(NOW) })
+  await page.goto('/')
+  await page.getByRole('tab', { name: 'My storage' }).click()
+  await page.getByLabel('Storage password').fill(VAULT_PASSWORD)
+  await page.getByRole('button', { name: 'Unlock' }).click()
+  await page.locator('#vault-open').waitFor()
+  await page.clock.fastForward('21:00')
+  await page.getByText('Locked after 20 minutes without activity').waitFor()
+  await page.getByLabel('Storage password').fill(VAULT_PASSWORD)
+  await settle(page)
+}
+
+test('My storage locked', async ({ browser }) => {
+  const [m, a] = [await browser.newPage(), await browser.newPage()]
+  await mockupVault(m, false)
+  await appVaultIdleLocked(a)
+  await compare('vault-lock', await shot(m.locator('#vault-locked')), await shot(a.locator('#vault-locked')))
+})
+
+test('My storage open', async ({ browser }) => {
+  const [m, a] = [await browser.newPage(), await browser.newPage()]
+  await mockupVault(m, true)
+  await appVault(a, true)
+  await compare('vault-open', await shot(m.locator('#vault-open')), await shot(a.locator('#vault-open')))
+})
+
+test('My storage open on a phone', async ({ browser }) => {
+  const viewport = { width: 390, height: 844 }
+  const [m, a] = [await browser.newPage({ viewport }), await browser.newPage({ viewport })]
+  await mockupVault(m, true)
+  await appVault(a, true)
+  await compare('vault-phone', await shot(m.locator('#vault-open')), await shot(a.locator('#vault-open')))
 })

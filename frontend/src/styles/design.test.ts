@@ -38,10 +38,20 @@ describe('extra.css (rules the static mockup cannot show)', () => {
   it('only adds touch and focus behaviour, never restyles the design', () => {
     const selectors = [...extra.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{[^{}]*\}/g)]
       .map((m) => m[1].trim()).filter((s) => !s.startsWith('@media'))
-    expect(selectors.sort()).toEqual(['.drop:focus-visible, .inside [role="button"]:focus-visible', '.item.photo .peek', '.opens'].sort())
+    expect(selectors.sort()).toEqual([
+      '.drop:focus-visible, .inside [role="button"]:focus-visible', '.item.photo .peek', '.opens',
+      '.phw .ph-act', '.phw:hover .ph-act, .phw:focus-within .ph-act', '.phw .ph-act',
+    ].sort())
   })
 
   it('shows hover-only hints on touch screens', () => {
     expect(extra).toMatch(/@media \(hover: none\)\s*\{[^}]*\.opens\s*\{\s*opacity:\s*1/)
   })
+
+  it('photo actions show on hover or focus only; on touch the tap opens the viewer instead', () => {
+    expect(extra).toMatch(/\.phw \.ph-act \{[^}]*opacity: 0/)
+    const touch = extra.slice(extra.indexOf('@media (hover: none)'), extra.indexOf('\n}', extra.indexOf('@media (hover: none)')))
+    expect(touch).toContain('.phw .ph-act { display: none; }')
+  })
 })
+

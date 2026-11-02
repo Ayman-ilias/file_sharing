@@ -81,3 +81,16 @@ describe('upload wording', () => {
     expect(formatEta(7200)).toBe('2 h left')
   })
 })
+
+describe('editedAgo (My storage notes)', () => {
+  it('counts days for the last week, then the date', async () => {
+    const { editedAgo } = await import('./format')
+    const at = (days: number, h = 0) => new Date(now.getTime() - days * 86_400_000 - h * 3_600_000)
+    expect(editedAgo(new Date(2026, 10, 2, 16, 28), now)).toBe('2 min ago')
+    expect(editedAgo(new Date(2026, 10, 2, 9, 5), now)).toBe('today')
+    expect(editedAgo(at(1), now)).toBe('yesterday')
+    expect(editedAgo(at(2), now)).toBe('2 days ago')
+    expect(editedAgo(at(6), now)).toBe('6 days ago')
+    expect(editedAgo(at(8), now)).toBe('Oct 25')
+  })
+})

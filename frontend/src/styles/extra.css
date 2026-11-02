@@ -4,7 +4,12 @@
 @media (hover: none) {
   .opens { opacity: 1; }
   .item.photo .peek { display: none; } /* a tap opens the full-screen viewer instead */
+  .phw .ph-act { display: none; } /* My storage photos: the viewer has Download and Delete */
 }
+
+/* My storage photos: Download and Delete appear on hover or keyboard focus (states.html §1) */
+.phw .ph-act { opacity: 0; transition: opacity .15s ease; }
+.phw:hover .ph-act, .phw:focus-within .ph-act { opacity: 1; }
 
 /* keyboard focus on the clickable drop zone and "+N more" */
 .drop:focus-visible, .inside [role="button"]:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }

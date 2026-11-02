@@ -30,11 +30,11 @@ export function VaultLock({ store, lockedBecause, usedBytes, itemCount }: Props)
 
   return (
     <section className="card vault-lock" id="vault-locked">
-      <div className="lock-ic"><Icon name="i-lock" size={22} /></div>
+      <div className="lock-ic"><Icon name="i-lock" size={26} /></div>
       <h2>My storage is locked</h2>
       {lockedBecause === 'idle' && <span className="why-locked">Locked after 20 minutes without activity</span>}
       {/* spec §3.7: honest about the limit (the mockup's "not even the server admin" was not true) */}
-      <p>Your notes, links, passwords and photos are encrypted on this device before they are saved, so the database, backups and colleagues can't read them. Only your storage password opens them.</p>
+      <p>Your notes, links, passwords and photos are encrypted on this device before they are saved. The database, backups and colleagues can't read them; a hacked server could.</p>
       <form className="unlock" onSubmit={submit}>
         <input ref={input} className="input" type="password" placeholder="Storage password" aria-label="Storage password"
           autoComplete="current-password" autoFocus value={pw} onChange={(e) => setPw(e.target.value)} />
@@ -42,7 +42,7 @@ export function VaultLock({ store, lockedBecause, usedBytes, itemCount }: Props)
       </form>
       {error && <div className="err-msg" role="alert" style={{ justifyContent: 'center' }}><Icon name="i-alert" size={14} />{error}</div>}
       <small>
-        Forgot it? It cannot be reset. That is what keeps it private. It can't protect you if the server itself is taken over.{' '}
+        Forgot it? It cannot be reset.{' '}
         <button type="button" onClick={() => setErasing(true)} style={{ color: 'var(--navy)', fontWeight: 600, fontSize: 'inherit' }}>
           Erase My storage and start again
         </button>

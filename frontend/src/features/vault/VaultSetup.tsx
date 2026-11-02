@@ -8,7 +8,7 @@ const MIN = 10
 export function OwnPasswordGate({ onOpenProfile }: { onOpenProfile: () => void }) {
   return (
     <section className="card vault-lock">
-      <div className="lock-ic"><Icon name="i-shield" size={22} /></div>
+      <div className="lock-ic"><Icon name="i-shield" size={26} /></div>
       <h2>Set up My storage</h2>
       <p>Set your own login password first (Profile). While you still use the shared starting password, anyone who knows it could open or erase your storage.</p>
       <button type="button" className="primary" style={{ width: '100%', justifyContent: 'center' }} onClick={onOpenProfile}>
@@ -48,7 +48,7 @@ export function VaultSetup({ store, onOpenProfile }: { store: VaultStore; onOpen
   if (gate) return <OwnPasswordGate onOpenProfile={onOpenProfile} />
   return (
     <form className="card vault-lock" onSubmit={submit} noValidate>
-      <div className="lock-ic"><Icon name="i-shield" size={22} /></div>
+      <div className="lock-ic"><Icon name="i-shield" size={26} /></div>
       <h2>Set up My storage</h2>
       <p>Choose a storage password. It encrypts everything on this device before it is saved, so only you can open it.</p>
       <div className="field" style={{ textAlign: 'left' }}>

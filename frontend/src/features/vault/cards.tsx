@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Icon } from '../../icons'
 import { copyText } from '../../lib/clipboard'
-import { formatBytes, relativeTime } from '../../lib/format'
+import { editedAgo, formatBytes, relativeTime } from '../../lib/format'
 import type { FileMeta, LinkMeta, NoteMeta, PasswordMeta } from './api'
 import { normalizeUrl } from './ItemForm'
 import type { DecryptedItem } from './store'
@@ -119,7 +119,7 @@ export function NoteCard({ item, meta, onEdit, onDelete, onToast }: CardProps<No
     <div className="card vcard">
       <div className="vc-top">
         <span className="vc-ic note"><Icon name="i-text" size={18} /></span>
-        <div><b>{meta.title}</b><small>Edited {relativeTime(item.updated_at)}</small></div>
+        <div><b>{meta.title}</b><small>Edited {editedAgo(item.updated_at)}</small></div>
         <ItemMenu onDelete={onDelete} actions={[
           { label: 'Edit', icon: 'i-edit', run: onEdit },
           { label: 'Copy note', icon: 'i-copy', run: () => void copyText(meta.text).then(copied(onToast)) },

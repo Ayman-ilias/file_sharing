@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs'
 import type { Page } from '@playwright/test'
 import { ROOT } from './fixtures'
+import type { VaultFixture } from './vault-fixture'
 
 export const NOW = new Date('2026-11-02T16:30:00+06:00')
 const MIN = 60_000
@@ -39,7 +40,7 @@ export const globalItems = [
     text_body: 'Network: SIOT-Guest\nPassword: changes every Monday, ask at the front desk\nMap: maps.google.com' },
 ]
 
-type Options = { me?: typeof ayman | null; private?: unknown[]; global?: unknown[]; users?: unknown[] }
+type Options = { me?: typeof ayman | null; private?: unknown[]; global?: unknown[]; users?: unknown[]; vault?: VaultFixture }
 
 export async function mockApi(page: Page, opts: Options = {}) {
   const me = opts.me === undefined ? ayman : opts.me
@@ -53,6 +54,12 @@ export async function mockApi(page: Page, opts: Options = {}) {
     if (p === '/api/items') {
       const items = url.searchParams.get('section') === 'global' ? opts.global ?? globalItems : opts.private ?? privateItems
       return json(200, { items, next: null })
+    }
+    if (p === '/api/vault' && opts.vault) return json(200, opts.vault.status)
+    if (p === '/api/vault/items' && opts.vault) return json(200, opts.vault.items)
+    const blob = p.match(/^\/api\/vault\/items\/(\w+)\/blob$/)
+    if (blob && opts.vault?.blobs.has(blob[1])) {
+      return route.fulfill({ status: 200, contentType: 'application/octet-stream', body: Buffer.from(opts.vault.blobs.get(blob[1])!) })
     }
     if (p.endsWith('/download')) return route.fulfill({ status: 200, contentType: 'image/jpeg', body: photo })
     if (p === '/api/events') return route.fulfill({ status: 204, body: '' })
