@@ -247,6 +247,8 @@ The owner sees mockups before the build. Content of the screens:
 
 ## 9. Migration and cutover
 
+> **Superseded 2026-11-03:** the owner stopped and deleted v1 (code and uploads, no backup). v2 starts empty: no import, no spare-port test, no rollback to v1. v2 lives in `/opt/southern-iot/file-sharing`; see `deploy/RUNBOOK.md`. The text below is kept as history.
+
 - Import script: every v1 item in `/root/arif/file_sharing/uploads` becomes a **Global item sent by the global account** (in v1 everything was visible to everyone). Names, folder structure and dates are preserved. Expiry = original date + 30 days. *(My call.)*
   - **`.txt` files** at the top level that are ≤ 1 MB and valid UTF-8 become **text items**. That matches v1, which showed every top-level `.txt` as text with a preview. Other `.txt` files become file items. *(My call.)*
   - The importer has `--mode copy` (default; keeps rollback possible) and `--mode move` (for when the old folder is too big to copy). It refuses to run if there is less free space than the copy needs plus 2 GB. The owner picks the mode at cutover, from the output of `du -sh`.

@@ -23,13 +23,11 @@ git clone -q "$REPO" "$H/app"
 rsync -a --delete "$REPO/deploy/" "$H/app/deploy/"
 git -C "$H/app" add -A
 git -C "$H/app" -c user.email=t@t -c user.name=t commit -q -m "test copy" --allow-empty
-cat > "$H/.env" <<ENV
-SHARED_PASSWORD=ops-pass-12345
-COOKIE_SECURE=false
-LOGIN_RATE_LIMIT=1000
-PUBLIC_PORT=$PORT
-TRUSTED_PROXIES=0.0.0.0/0
-ENV
+# .env made the way the runbook says (from .env.example), then adjusted for this test
+install -m 644 "$H/app/deploy/.env.example" "$H/.env"
+sed -i "s/^SHARED_PASSWORD=.*/SHARED_PASSWORD=ops-pass-12345/; s/^PUBLIC_PORT=.*/PUBLIC_PORT=$PORT/;
+        s#^TRUSTED_PROXIES=.*#TRUSTED_PROXIES=0.0.0.0/0#; s/^LOGIN_RATE_LIMIT=.*/LOGIN_RATE_LIMIT=1000/" "$H/.env"
+echo "COOKIE_SECURE=false" >> "$H/.env"
 chmod 644 "$H/.env"
 py() { python3 -c "import sys; sys.path.insert(0, '$REPO/deploy/tests'); import smoke
 c = smoke.sign_in('http://127.0.0.1:$PORT', 'ops-pass-12345', 'ops1@southerniot.net')

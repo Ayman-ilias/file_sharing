@@ -23,5 +23,5 @@ make frontend-dev     # http://localhost:5180
 make backend-test frontend-test frontend-e2e
 ```
 
-Status: plans 1–4 done (backend, transfers, Sharing frontend, My storage). Next: plan 5 (deploy, import from v1, benchmark).
+Status: plans 1–5 done (backend, transfers, Sharing frontend, My storage, deploy). To install on the VM: [deploy/RUNBOOK.md](deploy/RUNBOOK.md). After go-live: speed benchmark and security re-test.
 
