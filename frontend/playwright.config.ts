@@ -10,6 +10,7 @@ process.env.E2E_DATA_DIR ??= mkdtempSync(join(tmpdir(), 'fs-e2e-'))
 // on :8765 with a throwaway data folder (e2e/backend.sh).
 export default defineConfig({
   testDir: 'e2e',
+  testIgnore: 'deploy.spec.ts', // production stack only: playwright.deploy.config.ts
   timeout: 90_000,
   workers: 1,
   reporter: [['list']],
