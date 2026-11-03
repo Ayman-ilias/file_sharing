@@ -19,12 +19,15 @@ Everything is done with one script: `/opt/southern-iot/file-sharing/app/deploy/s
 
 **1.1 Check the VM** (changes nothing):
 ```bash
-docker compose version          # needs v2.21 or newer (for --wait-timeout)
+docker compose version          # v2.21 or newer; v5.x is fine
+docker buildx version           # any version (the images need BuildKit)
 git --version
 df -h /                         # needs a few GB free
 ss -ltnp | grep ':5000 ' || echo "port 5000 is free"
 ```
-You should see: a compose version, a git version, and `port 5000 is free`.
+You should see: a compose version, a buildx version, a git version, and `port 5000 is free`.
+
+If port 5000 is **not** free, see what holds it: `docker ps -a --filter publish=5000`. If it's the old `file-sharing-app` container, remove it with `docker rm -f file-sharing-app`. If it's anything else, stop and ask.
 
 **1.2 Get the code:**
 ```bash
@@ -60,15 +63,18 @@ Then open **https://files.southerneleven.com** in a browser. You should see the 
 app/deploy/sif.sh logs web
 ```
 (Ctrl+C to stop.) You should see the requests from step 1.5 starting with `10.10.8.100`.
-- If they start with **another IP** and show `403`, that IP is how the proxy reaches the container. Put it in `.env` next to the old one, e.g. `TRUSTED_PROXIES=10.10.8.100 172.17.0.1`, then run `app/deploy/sif.sh up`.
+- If they start with **another 10.10.x.x address** and show `403`, the proxy reaches the VM from that address. Put it in `.env` next to the old one, e.g. `TRUSTED_PROXIES=10.10.8.100 10.10.8.101`, then run `app/deploy/sif.sh up`.
+- If they start with **`172.`** or with the VM's own IP: **don't add it, stop and ask.** That address is Docker itself, and every computer in the office would arrive through it, so adding it would open the site to everyone on the network.
 - If you see **nothing at all**, the proxy at 10.10.8.100 isn't reaching port 5000. Check its "file sharing" host still points to this VM's IP, port 5000.
 
 **1.7 Nightly backup** (02:15 every night):
 ```bash
-crontab -l 2>/dev/null | { cat; echo '15 2 * * * /opt/southern-iot/file-sharing/app/deploy/sif.sh backup >> /opt/southern-iot/file-sharing/backups/backup.log 2>&1'; } | crontab -
+crontab -l 2>/dev/null | grep -q 'sif.sh backup' || \
+  crontab -l 2>/dev/null | { cat; echo '15 2 * * * /opt/southern-iot/file-sharing/app/deploy/sif.sh backup >> /opt/southern-iot/file-sharing/backups/backup.log 2>&1'; } | crontab -
+crontab -l | grep sif.sh
 app/deploy/sif.sh backup
 ```
-You should see `backup: /opt/southern-iot/file-sharing/backups/sif-<date>.tar.gz (…)`.
+You should see the cron line once, then `backup: /opt/southern-iot/file-sharing/backups/sif-<date>.tar.gz (…)`. (Running this block twice doesn't add the line twice.) `backup.log` grows by one line a night; you can empty it any time with `: > backups/backup.log`.
 
 A backup holds the database and everyone's **My storage** (encrypted). Shared files are **not** backed up: they expire after 30 days anyway. The script keeps the newest 14 backups, using at most 5 GB.
 
@@ -107,7 +113,7 @@ app/deploy/sif.sh up              # start it again / apply a changed .env
 ```bash
 cd /opt/southern-iot/file-sharing
 app/deploy/sif.sh backup
-app/deploy/sif.sh update v2.0.1   # the new release tag
+app/deploy/sif.sh update v2.0.1   # the new release tag (use tags, not branch names)
 ```
 You should see `code: <old> -> <new> (v2.0.1)` and `UP on port 5000`. Database changes run by themselves at start. To go back, run `app/deploy/sif.sh update v2.0.0`. If the new version changed the database, restore the backup you took first (section 6).
 
@@ -118,7 +124,10 @@ cd /opt/southern-iot/file-sharing
 ls -lt backups/                                   # pick one
 app/deploy/sif.sh restore backups/sif-2026-11-10-021500.tar.gz
 ```
-This stops the site, moves the current database and My storage to `backups/before-restore-<date>/` (nothing is deleted), restores the backup, and starts again. Anything sent after that backup is gone from the lists.
+This stops the site, moves the current database and My storage to `backups/before-restore-<date>/` (nothing is deleted), restores the backup, and starts again.
+- Anything sent after that backup is gone from the lists.
+- Shared files that expired since the backup may still be listed but no longer download. They disappear from the lists within an hour.
+- The `before-restore-<date>` folders are your undo. They are never removed by themselves; delete them yourself once you're sure (`rm -r backups/before-restore-<date>`).
 
 ## 7. If something is wrong
 

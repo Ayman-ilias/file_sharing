@@ -70,6 +70,17 @@ wait_up 200
 python3 "$REPO/deploy/tests/smoke.py" --base "http://127.0.0.1:$PORT" --password "$PASSWORD" \
   || fail "smoke checks"
 
+# The allowlist validator: every bad entry is refused by name, good ones pass.
+check_entry() {  # $1 = expected exit (0 ok, 1 refused), $2 = TRUSTED_PROXIES
+  rc=0
+  docker run --rm -e "TRUSTED_PROXIES=$2" --entrypoint sh southern-iot-files-web:local \
+    /docker-entrypoint.d/40-trusted-proxies.sh >/dev/null 2>&1 || rc=1
+  [ "$rc" = "$1" ] || fail "TRUSTED_PROXIES='$2' gave exit $rc, want $1"
+}
+for bad in 300.1.1.1 10.0.0.0/99 10.1.1 : :::: 10.10.8.1OO fd00::/129; do check_entry 1 "$bad"; done
+for good in 10.10.8.100 "10.0.0.0/8 192.168.1.7" 0.0.0.0/0 ::1 fd00::/8 2001:db8::1; do check_entry 0 "$good"; done
+echo "PASS TRUSTED_PROXIES validator (bad refused, good accepted)"
+
 # The allowlist comes from .env alone: an untrusted client gets 403 everywhere.
 write_env "203.0.113.9"
 compose up -d --wait --wait-timeout 120 >/dev/null || fail "compose up (allowlist run)"

@@ -28,6 +28,7 @@ check_env() {
 cmd_up() {
   check_env
   mkdir -p "$DATA" "$BACKUPS"
+  # top level only: the API creates everything inside as 10001 (restore does chown -R)
   chown "$APP_UID:$APP_UID" "$DATA" "$BACKUPS"
   chmod 700 "$BACKUPS"
   if ! compose up -d --build --remove-orphans --wait --wait-timeout 180; then
@@ -54,7 +55,14 @@ cmd_update() {
   [ -z "$(git -C "$APP" status --porcelain)" ] || die "$APP has local changes; not updating"
   old=$(git -C "$APP" rev-parse --short HEAD)
   git -C "$APP" fetch -q --tags origin 2>/dev/null || git -C "$APP" fetch -q --tags
-  git -C "$APP" checkout -q "$ref"
+  # a release tag, else the branch as it is on GitHub (never a stale local branch)
+  if git -C "$APP" rev-parse -q --verify "refs/tags/$ref" >/dev/null; then
+    git -C "$APP" checkout -q "refs/tags/$ref"
+  elif git -C "$APP" rev-parse -q --verify "refs/remotes/origin/$ref" >/dev/null; then
+    git -C "$APP" checkout -q --detach "origin/$ref"
+  else
+    git -C "$APP" checkout -q "$ref"
+  fi
   echo "code: $old -> $(git -C "$APP" rev-parse --short HEAD) ($ref)"
   cmd_up
 }
@@ -68,17 +76,32 @@ cmd_backup() {
 import os, sqlite3, sys, tarfile
 name = sys.argv[1]
 tmp = f"/backups/.tmp-{name}"
-src = sqlite3.connect("file:/data/app.db?mode=ro", uri=True)
-dst = sqlite3.connect(tmp)
-src.backup(dst)
-dst.close(); src.close()
 part = f"/backups/.{name}.part"
-with tarfile.open(part, "w:gz") as tar:
-    tar.add(tmp, arcname="app.db")
-    tar.add("/data/vault", arcname="vault")
-os.remove(tmp)
-os.rename(part, f"/backups/{name}")
+try:
+    src = sqlite3.connect("file:/data/app.db?mode=ro", uri=True)
+    dst = sqlite3.connect(tmp)
+    src.backup(dst)
+    dst.close(); src.close()
+    with tarfile.open(part, "w:gz") as tar:
+        tar.add(tmp, arcname="app.db")
+        tar.add("/data/vault", arcname="vault", recursive=False)
+        # files can be deleted while we walk (a user, the cleanup job): skip those
+        for root, dirs, files in os.walk("/data/vault"):
+            for entry in dirs + files:
+                path = os.path.join(root, entry)
+                try:
+                    tar.add(path, arcname="vault/" + os.path.relpath(path, "/data/vault"),
+                            recursive=False)
+                except FileNotFoundError:
+                    pass
+    os.rename(part, f"/backups/{name}")
+finally:
+    for leftover in (tmp, part):
+        if os.path.exists(leftover):
+            os.remove(leftover)
 PY
+  # leftovers of a backup that was killed half-way
+  find "$BACKUPS" -maxdepth 1 \( -name '.tmp-sif-*' -o -name '.sif-*.part' \) -mtime +0 -delete
   # keep the newest $KEEP_ARCHIVES, and at most $KEEP_BYTES in total
   local n=0 total=0 size f
   while IFS= read -r f; do

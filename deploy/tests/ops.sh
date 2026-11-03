@@ -23,6 +23,7 @@ git clone -q "$REPO" "$H/app"
 rsync -a --delete "$REPO/deploy/" "$H/app/deploy/"
 git -C "$H/app" add -A
 git -C "$H/app" -c user.email=t@t -c user.name=t commit -q -m "test copy" --allow-empty
+git -C "$H/app" tag test-release  # update is tested the way the runbook does it: to a release tag
 # .env made the way the runbook says (from .env.example), then adjusted for this test
 install -m 644 "$H/app/deploy/.env.example" "$H/.env"
 sed -i "s/^SHARED_PASSWORD=.*/SHARED_PASSWORD=ops-pass-12345/; s/^PUBLIC_PORT=.*/PUBLIC_PORT=$PORT/;
@@ -69,7 +70,10 @@ echo "PASS restore returns to the backup"
 
 # 4. update keeps data
 send_text "kept-across-update"
-$SIF update HEAD | grep -q "UP on port $PORT" || fail "update"
+out=$($SIF update test-release) || fail "update: $out"
+grep -q "UP on port $PORT" <<<"$out" || fail "update: $out"
+grep -q "(test-release)" <<<"$out" || fail "update did not check out the tag: $out"
+grep -q "half-way" "$H/app/deploy/sif.sh" || fail "update replaced the tested code"
 listed | grep -q kept-across-update || fail "update lost data"
 echo "PASS update keeps data"
 
@@ -80,7 +84,13 @@ st=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/")
 [ "$st" = 403 ] || fail "TRUSTED_PROXIES in .env ignored by sif.sh (got $st)"
 echo "PASS TRUSTED_PROXIES in .env is used"
 
-# 6. backup retention: at most 14 archives
+# 6. leftovers of an aborted backup (older than a day) are removed by the next backup
+sudo touch -d "-2 days" "$H/backups/.tmp-sif-old.tar.gz" "$H/backups/.sif-old.tar.gz.part"
+$SIF backup >/dev/null
+sudo bash -c "ls -A $H/backups" | grep -E '^\.(tmp-|.*\.part$)' && fail "stale backup temp files kept"
+echo "PASS stale backup temp files removed"
+
+# 7. backup retention: at most 14 archives
 for i in $(seq 16); do sudo touch -d "-$i hours" "$H/backups/sif-old-$i.tar.gz"; done
 $SIF backup >/dev/null
 n=$(sudo bash -c "ls -1 $H/backups/sif-*.tar.gz | wc -l")

@@ -149,3 +149,16 @@ These override the task text below where they differ.
 - [ ] Full verification: `make backend-test backend-lint frontend-test`, `npx playwright test`, `bash deploy/tests/api-image.sh`, `bash deploy/tests/stack.sh --browser`, `bash deploy/tests/ops.sh`.
 - [ ] Fresh whole-branch review of the plan-5 range (most capable model).
 - [ ] With the owner's OK: push `feature/v2`, tag `v2.0.0` on it and push the tag (the runbook clones that tag).
+
+## Final review (2026-11-03, fresh opus reviewer) — outcome
+
+0 critical, 3 important, 7 minor. Fixed, each with a test where one fits:
+- Runbook 403 advice could open port 5000 to the LAN (adding a Docker-gateway `172.x` address) → runbook says stop and ask; port published on IPv4 only (`0.0.0.0:`) so IPv6 can't arrive as the gateway.
+- Backup aborted on a file deleted mid-walk and left `.tmp-`/`.part` files → per-file add skipping vanished files, `try/finally`, stale leftovers (> 1 day) deleted (`ops.sh` "stale backup temp files removed", red before the fix).
+- `update <branch>` could check out a stale local branch → tags first, else `origin/<branch>` (`ops.sh` updates to a tag and checks the tested code stayed).
+- `TRUSTED_PROXIES` validator accepted `300.1.1.1`, `/99`, `:`, `::::` → octet and prefix checks (`stack.sh` validator test, red before the fix).
+- nginx kept a stale `api` address after `api` was recreated → `depends_on.api.restart: true`.
+- Runbook: buildx check, what to do if 5000 is taken, compose "v5 is fine", cron line added once, `backup.log`, restore notes (expired files, `before-restore-*` = undo).
+- amd64 (the VM's likely CPU): both images build for linux/amd64 and the API's dependencies import there.
+- Ruling: `sif.sh up` chowns only the top of `data/` and `backups/` (not `-R`) — the API creates everything inside as 10001 and a recursive chown over many GB on each start is slow; restore does `chown -R`. Cost if wrong: files copied in by hand as root would be unreadable until `chown -R 10001:10001 data`.
+- Still open: the `v2.0.0` tag the runbook clones must be pushed (needs the owner's OK).
