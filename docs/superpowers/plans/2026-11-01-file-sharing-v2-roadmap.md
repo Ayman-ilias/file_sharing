@@ -11,10 +11,10 @@ The spec covers five subsystems. Each gets its own plan, and each plan ends with
 | # | Plan | Delivers | Depends on |
 |---|---|---|---|
 | 1 | [Backend foundation](2026-11-01-plan-1-backend-foundation.md) | Settings, DB and migrations, accounts (register, login, sessions, change password, global account), user list, text items, Private/Global listing, delete with audit, download headers, expiry job, security regression tests | — |
-| 2 | Transfers | Chunked parallel resumable uploads (16 MiB chunks), folders, streaming zip, live events (SSE), disk-space checks | 1 |
-| 3 | Frontend: Sharing, login, profile | The mockup rebuilt in React, wired to plans 1–2: animated background, top tabs, upload card with progress, Private/Global, item cards, photo peek, PDF and links in a new tab, login and register, profile drawer, password nudge; Playwright screenshot checks | 1, 2 |
-| 4 | My storage | Client-side encrypted vault (AES-256-GCM, PBKDF2-SHA-256 600 000 iterations), storage password, 200 MB quota, 20-minute auto-lock, notes, links, passwords, photos and files | 1, 2, 3 |
-| 5 | Deploy, import, benchmark | nginx and compose, Dockerfiles (non-root, pinned), `import_v1.py`, benchmark through `files.southerneleven.com`, security re-test (rerun the 2026-11-01 attack set), cutover runbook for the owner | 1–4 |
+| 2 | [Transfers](2026-11-02-plan-2-transfers.md) ✔ | Chunked parallel resumable uploads (16 MiB chunks), folders, streaming zip, live events (SSE), disk-space checks | 1 |
+| 3 | [Frontend: Sharing, login, profile](2026-11-02-plan-3-frontend.md) ✔ | The mockup rebuilt in React, wired to plans 1–2: animated background, top tabs, upload card with progress, Private/Global, item cards, photo peek, PDF and links in a new tab, login and register, profile drawer, password nudge, in-page re-sign-in; Playwright parity (< 1 % pixels vs the mockup) and end-to-end flows | 1, 2 |
+| 4 | [My storage](2026-11-02-plan-4-my-storage.md) ✔ | Client-side encrypted vault (AES-256-GCM, PBKDF2-SHA-256 600 000 iterations), storage password, 200 MB quota, 20-minute auto-lock, notes, links, passwords, photos and files | 1, 2, 3 |
+| 5 | [Deploy](2026-11-03-plan-5-deploy.md) ✔ | nginx and compose, Dockerfiles (non-root, pinned), `deploy/sif.sh` (up, update, backup, restore), runbook `deploy/RUNBOOK.md`. **No v1 import** (the owner deleted v1 on 2026-11-03). Benchmark and security re-test run after go-live | 1–4 |
 
 ## Tooling (verified on the Mac, 2026-11-01)
 
@@ -55,6 +55,8 @@ No user-supplied name is ever part of a path.
 | `DISK_MARGIN` | `2147483648` (2 GiB) | Free space that must remain after an upload |
 | `VAULT_QUOTA` | `209715200` (200 MiB) | My storage limit per user (ciphertext bytes) |
 | `TRUST_X_REAL_IP` | `true` | Read the client IP from nginx's `X-Real-IP`; nginx sets it from `CF-Connecting-IP` only for `TRUSTED_PROXIES` |
+| `SERVE_FILES` | `false` | Dev and e2e only (no nginx): the API sends file bytes itself instead of `X-Accel-Redirect`. Keep `false` in production |
+| `LOGIN_RATE_LIMIT` | `10` | Registrations and failed logins per client IP per minute. An office behind one public IP shares it: raise it for launch day |
 
 ### Tables (`app/models.py`)
 
@@ -99,13 +101,13 @@ Visibility rule, used everywhere: a user sees an item if they are its sender, or
 | `POST /api/batches` | 2 ✔ | `{name, file_count, recipient_ids, is_global}` → 201 `{batch_id}`; 400 `empty` / `too_many_files` (> 5000) |
 | `POST /api/batches/{id}/files` | 2 ✔ | `{files: [{relative_path, size, mime, client_key}]}` (≤ 500) → 201 `{uploads: [{relative_path, upload_id, chunk_size, received}]}`; 409 `duplicate_path` / `batch_full` / `batch_closed`; 400 `bad_path` |
 | `POST /api/batches/{id}/complete` | 2 ✔ | → 201 `{item, failed: [relative_path]}`; a repeat → 200, same answer; 400 `empty_batch` |
-| `GET /api/events` | 2 ✔ | SSE: `retry: 3000`, then `item.created` `{item}`, `item.deleted` `{id, by: username\|null}` (null = expired); `: ping` every 25 s; the session is re-checked each heartbeat; ≤ 10 streams per user; slow streams are dropped; the client refetches the list after a reconnect |
-| `GET /api/vault` | 4 | → `{initialized, salt, iterations, wrapped_key, used_bytes, quota_bytes}` |
-| `POST /api/vault/setup` / `PUT /api/vault/key` | 4 | `{salt, iterations, wrapped_key}` → 204; 409 `already_initialized` / 404 `not_initialized` |
-| `POST /api/vault/erase` | 4 | `{confirm: "ERASE"}` → 204 (deletes all vault items, blobs and the key) |
-| `GET/POST /api/vault/items`, `PUT/DELETE /api/vault/items/{id}` | 4 | ciphertext only; PUT carries `version` → 409 `stale_version` |
-| `GET /api/vault/items/{id}/blob` | 4 | ciphertext via X-Accel-Redirect |
-| (all `/api/vault/*`) | 4 | 403 `global_account` for the global account |
+| `GET /api/events` | 2 ✔ | SSE: `retry: 3000`, then `item.created` `{item}`, `item.deleted` `{id, by: username\|null}` (null = expired); `event: ping` (data `{}`) every 25 s, a named event so the page can see it; the session is re-checked each heartbeat; ≤ 10 streams per user; slow streams are dropped; the client refetches the list after a reconnect |
+| `GET /api/vault` | 4 ✔ | → `{initialized, salt, iterations, wrapped_key, key_gen, kdf, used_bytes, quota_bytes, item_count, held_bytes}` |
+| `POST /api/vault/setup` / `PUT /api/vault/key` | 4 ✔ | `{salt, iterations, wrapped_key}` → 204; setup needs the user's own login password (403 `own_password_required`), 409 `already_initialized`; key change needs `previous_wrapped_key` (409 `stale_key`), 404 `not_initialized` |
+| `POST /api/vault/erase` | 4 ✔ | `{confirm: "ERASE", login_password}` → 204 (deletes all vault items, blobs, vault uploads and the key; 401 `bad_credentials`) |
+| `GET/POST /api/vault/items`, `PUT/DELETE /api/vault/items/{id}` | 4 ✔ | ciphertext only; writes carry `key_gen` (409 `key_changed`); PUT carries `version` → 409 `stale_version` with `current`; 507 `vault_full`; ≤ 5 000 items; `POST /api/vault/release-held` frees quiet vault uploads |
+| `GET /api/vault/items/{id}/blob` | 4 ✔ | ciphertext via X-Accel-Redirect (bytes with `SERVE_FILES`) |
+| (all `/api/vault/*`) | 4 ✔ | 403 `global_account` for the global account |
 
 `Item` = `{id, kind, name, size, mime, sender: {id, username}, recipients: [{id, username}], is_global, text_body (text items only), text_truncated, line_count (text only), file_count (folders only), created_at, expires_at}`. Times are ISO 8601 UTC. **Lists carry at most the first 2000 characters of a text** (`text_truncated: true`). `GET /api/items/{id}` returns the whole item; the card's "Show all N lines" calls it (code review 2026-11-02).
 

@@ -20,3 +20,4 @@ data/
 *.db-shm
 .env
 deploy/.env
+backend/data-local/

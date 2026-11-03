@@ -196,13 +196,6 @@ def test_non_hex_upload_id_is_404(pair):
         assert put_chunk(a, bad, 0, b"abcd").status_code == 404
 
 
-def test_vault_target_not_yet_supported(pair):
-    a, r = pair
-    resp = a.post("/api/uploads", json={"client_key": "v", "name": "v", "size": 1, "mime": "x/y",
-                                        "recipient_ids": [], "is_global": False, "target": "vault"})
-    assert resp.status_code == 400 and resp.json()["detail"] == "bad_target"
-
-
 def test_batch_fields_rejected_here(pair):
     a, r = pair
     resp = start_upload(a, DATA, recipients=[r.me["id"]], batch_id="a" * 32, relative_path="x")

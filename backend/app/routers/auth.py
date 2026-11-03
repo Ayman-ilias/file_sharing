@@ -3,7 +3,8 @@ import re
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session
 
 from app.config import Settings
@@ -19,17 +20,17 @@ _DUMMY_HASH = hash_password("dummy password for timing")
 
 
 class EmailIn(BaseModel):
-    email: str
+    email: str = Field(max_length=254)
 
 
 class LoginIn(BaseModel):
-    email: str
-    password: str
+    email: str = Field(max_length=254)
+    password: str = Field(max_length=1024)  # Argon2 must not run over megabytes
 
 
 class PasswordIn(BaseModel):
-    current_password: str
-    new_password: str
+    current_password: str = Field(max_length=1024)
+    new_password: str = Field(max_length=1024)
 
 
 MIN_PASSWORD_LEN = 10
@@ -57,6 +58,8 @@ def to_me(user: User) -> Me:
 
 def check_password(user: User, password: str, settings: Settings) -> bool:
     if user.is_global or user.password_hash is None:
+        # same cost as every other login, so timing can't tell who is on the shared password
+        verify_password(_DUMMY_HASH, password)
         shared = settings.shared_password.get_secret_value()
         return hmac.compare_digest(password.encode(), shared.encode())
     return verify_password(user.password_hash, password)
@@ -88,13 +91,15 @@ def register(body: EmailIn, request: Request, response: Response, db: Session = 
         raise HTTPException(400, "domain_not_allowed") from None
     if email == settings.global_email.lower():
         raise HTTPException(400, "reserved")
-    user = db.query(User).filter_by(email=email).one_or_none()
-    if user is not None:
+    # INSERT … ON CONFLICT DO NOTHING: two simultaneous registrations can't collide (no 500)
+    created = db.execute(
+        insert(User).values(email=email, username=email.split("@")[0], is_global=False,
+                            created_at=utcnow()).on_conflict_do_nothing()
+    ).rowcount
+    db.commit()
+    if not created:
         response.status_code = 200
-    else:
-        user = User(email=email, username=email.split("@")[0])
-        db.add(user)
-        db.commit()
+    user = db.query(User).filter_by(email=email).one()
     return {"email": user.email, "username": user.username}
 
 

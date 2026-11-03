@@ -15,6 +15,7 @@ from app.deps import current_user
 from app.events import audience_for, notify_created
 from app.models import Batch, FolderEntry, Item, ItemRecipient, Upload, User
 from app.routers.items import resolve_recipients, to_out
+from app.routers.uploads import QUOTA_LOCK
 from app.storage import free_bytes, remove_stored
 from app.transfers import (
     clean_mime,
@@ -67,6 +68,20 @@ async def _hold_upload_locks(app, batch_id: str):
         for uid in ids:
             await stack.enter_async_context(app.state.upload_locks.get(uid))
         yield ids
+
+
+def _collisions(paths: list[str]) -> str | None:
+    """Folder trees must unzip on Windows/macOS too: no case-only duplicates, and no path that is
+    both a file and a folder (`docs` and `docs/x.txt`)."""
+    folded = [p.casefold() for p in paths]
+    if len(set(folded)) != len(folded):
+        return "duplicate_path"
+    files = set(folded)
+    for p in folded:
+        parts = p.split("/")
+        if any("/".join(parts[:i]) in files for i in range(1, len(parts))):
+            return "path_conflict"
+    return None
 
 
 def own_batch(db: Session, user: User, batch_id: str) -> Batch:
@@ -124,10 +139,14 @@ async def register_files(batch_id: str, body: BatchFilesIn, request: Request,
                 if f.size > settings.max_file_size:
                     raise HTTPException(413, "too_large")
             paths = [p for p, _ in wanted]
-            if len(set(paths)) != len(paths):
-                raise HTTPException(409, "duplicate_path")
             existing = {u.relative_path: u for u in db.scalars(
                 select(Upload).where(Upload.batch_id == batch.id))}
+            if len(set(paths)) != len(paths):  # the same path twice in one request
+                raise HTTPException(409, "duplicate_path")
+            # re-registering an existing path is fine (resume/retry); clashes are not
+            problem = _collisions(sorted(set(existing) | set(paths)))
+            if problem:
+                raise HTTPException(409, problem)
             out, new_bytes, now = [], 0, utcnow()
             for path, f in wanted:
                 old = existing.get(path)
@@ -151,16 +170,17 @@ async def register_files(batch_id: str, body: BatchFilesIn, request: Request,
                     is_global=batch.is_global, created_at=now, updated_at=now)))
             if len(set(existing) | set(paths)) > batch.file_count:
                 raise HTTPException(409, "batch_full")
-            if reserved_bytes(db, user.id) + new_bytes > settings.max_user_reserved:
-                raise HTTPException(429, "upload_quota")
-            free = free_bytes(settings.data_dir) - reserved_bytes(db)
-            if free - new_bytes < settings.disk_margin:
-                raise HTTPException(507, "disk_full")
-            for _, up in out:
-                if up not in db:
-                    db.add(up)
-            batch.updated_at = now
-            db.commit()
+            with QUOTA_LOCK:  # check + insert as one step (parallel registrations)
+                if reserved_bytes(db, user.id) + new_bytes > settings.max_user_reserved:
+                    raise HTTPException(429, "upload_quota")
+                free = free_bytes(settings.data_dir) - reserved_bytes(db)
+                if free - new_bytes < settings.disk_margin:
+                    raise HTTPException(507, "disk_full")
+                for _, up in out:
+                    if up not in db:
+                        db.add(up)
+                batch.updated_at = now
+                db.commit()
             for _, up in out:  # zero-byte files have no chunks: done at once
                 if up.size == 0 and up.completed_at is None:
                     complete_batch_file(db, up, settings.data_dir)

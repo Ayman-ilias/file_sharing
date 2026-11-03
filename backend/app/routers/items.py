@@ -1,5 +1,6 @@
 import base64
 import binascii
+import logging
 import unicodedata
 from datetime import datetime, timedelta
 from pathlib import PurePosixPath
@@ -8,7 +9,7 @@ from urllib.parse import quote
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import Select, and_, exists, or_, select
 from sqlalchemy.orm import Session
@@ -18,9 +19,10 @@ from app.deps import current_user
 from app.events import audience_for, notify_created, notify_deleted
 from app.models import AuditLog, FolderEntry, Item, ItemRecipient, User
 from app.schemas import ItemOut, ItemPage, TextItemIn, UserRef
-from app.storage import accel_path, remove_stored
+from app.storage import accel_path, remove_stored, storage_path
 
 router = APIRouter(prefix="/api/items", tags=["items"])
+log = logging.getLogger("fs.items")
 
 UNTITLED_MAX = 80
 TEXT_PREVIEW_CHARS = 2000  # lists carry a preview; the card asks for the rest on "Show all"
@@ -59,9 +61,12 @@ def decode_cursor(cursor: str) -> tuple[datetime, str]:
     try:
         raw = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode()
         ts, item_id = raw.split("|", 1)
-        return datetime.fromisoformat(ts), item_id
+        when = datetime.fromisoformat(ts)
     except (binascii.Error, UnicodeDecodeError, ValueError):
         raise HTTPException(400, "bad_cursor") from None
+    if when.tzinfo is None:  # cursors we issue are always timezone-aware
+        raise HTTPException(400, "bad_cursor")
+    return when, item_id
 
 
 def to_out(items: list[Item], db: Session, *, full: bool = False) -> list[ItemOut]:
@@ -177,8 +182,11 @@ def get_visible(db: Session, user: User, item_id: str) -> Item:
     return item
 
 
-def file_response(storage_id: str, filename: str, mime: str, inline: bool) -> Response:
-    """Empty body + X-Accel-Redirect: nginx streams the bytes (Range, sendfile)."""
+def file_response(settings, storage_id: str, filename: str, mime: str, inline: bool) -> Response:
+    """Empty body + X-Accel-Redirect: nginx streams the bytes (Range, sendfile).
+
+    With SERVE_FILES (dev and e2e, no nginx) the bytes come from here, with the same headers.
+    """
     base_mime = mime.split(";")[0].strip().lower()
     show_inline = inline and base_mime in INLINE_SANDBOXED | INLINE_PLAIN
     disposition = "inline" if show_inline else "attachment"
@@ -190,6 +198,10 @@ def file_response(storage_id: str, filename: str, mime: str, inline: bool) -> Re
     if show_inline and base_mime in INLINE_SANDBOXED:
         headers["Content-Security-Policy"] = "sandbox"
     media_type = base_mime if show_inline else "application/octet-stream"
+    if settings.serve_files:
+        del headers["X-Accel-Redirect"]
+        path = storage_path(settings.data_dir, "files", storage_id)
+        return FileResponse(path, media_type=media_type, headers=headers)
     return Response(content=b"", media_type=media_type, headers=headers)
 
 
@@ -211,17 +223,21 @@ def delete_item(item_id: str, request: Request, user: User = Depends(current_use
     db.delete(item)
     db.commit()
     for sid in stored:
-        remove_stored(data_dir, "files", sid)
+        try:
+            remove_stored(data_dir, "files", sid)
+        except OSError:  # the row is gone; the orphan sweep removes the file later
+            log.exception("delete: could not remove %s", sid)
     notify_deleted(request.app, item_id, audience, by=user.username)
 
 
 @router.get("/{item_id}/download")
-def download(item_id: str, inline: bool = False, user: User = Depends(current_user),
+def download(item_id: str, request: Request, inline: bool = False,
+             user: User = Depends(current_user),
              db: Session = Depends(get_db)):
     item = get_visible(db, user, item_id)
     if item.kind != "file" or not item.storage_id:
         raise HTTPException(400, "not_a_file")
-    return file_response(item.storage_id, item.name, item.mime, inline)
+    return file_response(request.app.state.settings, item.storage_id, item.name, item.mime, inline)
 
 
 @router.get("/{item_id}/entries", response_model=list[EntryOut])
@@ -234,14 +250,14 @@ def list_entries(item_id: str, user: User = Depends(current_user), db: Session =
 
 
 @router.get("/{item_id}/entries/{entry_id}/download")
-def download_entry(item_id: str, entry_id: str, inline: bool = False,
+def download_entry(item_id: str, entry_id: str, request: Request, inline: bool = False,
                    user: User = Depends(current_user), db: Session = Depends(get_db)):
     item = get_visible(db, user, item_id)
     entry = db.get(FolderEntry, entry_id)
     if entry is None or entry.item_id != item.id:
         raise HTTPException(404, "not_found")
     filename = PurePosixPath(entry.relative_path).name
-    return file_response(entry.storage_id, filename, entry.mime, inline)
+    return file_response(request.app.state.settings, entry.storage_id, filename, entry.mime, inline)
 
 
 @router.get("/{item_id}/zip")
@@ -253,7 +269,10 @@ def download_zip(item_id: str, request: Request, user: User = Depends(current_us
     item = get_visible(db, user, item_id)
     if item.kind != "folder":
         raise HTTPException(400, "not_a_folder")
-    zs = folder_zip(item, request.app.state.settings.data_dir)
+    data_dir = request.app.state.settings.data_dir
+    if not all(storage_path(data_dir, "files", e.storage_id).exists() for e in item.entries):
+        raise HTTPException(410, "gone")  # e.g. expired while the page was open
+    zs = folder_zip(item, data_dir)
     headers = {
         "Content-Length": str(len(zs)),
         "Content-Disposition": f"attachment; filename*=UTF-8''{quote(item.name + '.zip', safe='')}",

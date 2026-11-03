@@ -157,3 +157,28 @@ def test_hostile_names_are_plain_data(client, file_item, make_file_item, db_sess
     assert unquote(h["content-disposition"].split("''", 1)[1]) == name
     assert not (app_settings.data_dir / "x").exists()
     assert not (app_settings.data_dir.parent / "x").exists()
+
+
+def test_serve_files_sends_the_bytes_itself(client, file_item, app_settings):
+    """Dev and e2e have no nginx: SERVE_FILES=true streams from disk, same headers otherwise."""
+    app_settings.serve_files = True
+    r = client.get(f"/api/items/{file_item.id}/download")
+    assert r.status_code == 200 and r.content == b"abc"
+    assert "x-accel-redirect" not in r.headers
+    assert r.headers["content-disposition"].startswith("attachment;")
+    assert r.headers["content-type"] == "application/octet-stream"
+    assert r.headers["cache-control"] == "private, no-store"
+    inline = client.get(f"/api/items/{file_item.id}/download?inline=1")
+    assert inline.content == b"abc" and inline.headers["content-type"].startswith("application/pdf")
+
+
+def test_serve_files_supports_range(client, file_item, app_settings):
+    app_settings.serve_files = True
+    r = client.get(f"/api/items/{file_item.id}/download", headers={"Range": "bytes=1-"})
+    assert r.status_code == 206 and r.content == b"bc"
+
+
+def test_serve_files_is_off_by_default():
+    from app.config import Settings
+
+    assert Settings(_env_file=None, shared_password="x").serve_files is False

@@ -139,6 +139,9 @@ class VaultKey(Base):
     salt: Mapped[str] = mapped_column(String(64))
     iterations: Mapped[int] = mapped_column(Integer)
     wrapped_key: Mapped[str] = mapped_column(String(512))
+    # new on every setup: writes made with an older data key (another device, before an erase)
+    # are refused
+    key_gen: Mapped[str] = mapped_column(String(16))
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 

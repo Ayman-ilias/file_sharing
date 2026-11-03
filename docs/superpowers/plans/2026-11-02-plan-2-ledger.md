@@ -41,3 +41,5 @@ Final: minor (deferred): folder path collisions not detected: case-only duplicat
 Final: minor (deferred): folder_zip raises FileNotFoundError → 500 if a stored file vanished (e.g. expiry during download)
 Final: minor (deferred): chunk PUT without Content-Length (chunked transfer encoding) gets 400; document for non-browser clients
 Final: declined-to-judge noted: load behaviour at 20 users × parallel 16 MB chunks; real Cloudflare/nginx behaviour (plan 5); whether get_db pins a SQLite connection for the life of an SSE/zip response (check in plan 3/5)
+
+Fixed 2026-11-02 (owner: "fix all"): all 7 deferred minors — tests in backend/tests/test_minor_fixes.py (test_p2_*): lock table bounded and held locks never replaced, quota/disk check + insert under one lock, resume refreshes updated_at, Windows-reserved names/trailing dots/depth > 32 refused, case-only duplicates and file-vs-folder clashes → 409, zip of a folder with a vanished file → 410 gone, chunk without Content-Length → 411 length_required.

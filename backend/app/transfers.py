@@ -19,7 +19,9 @@ from app.storage import storage_path
 _BIDI = dict.fromkeys(map(ord, "‪‫‬‭‮⁦⁧⁨⁩"))
 _MIME = re.compile(r"[\w.+-]+/[\w.+-]+")
 _DRIVE = re.compile(r"[A-Za-z]:")
+_RESERVED = re.compile(r"(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\..*)?", re.IGNORECASE)
 MAX_SEGMENT_BYTES = 255
+MAX_DEPTH = 32  # folders deeper than this can't be extracted on many systems
 
 
 class DiskFull(Exception):
@@ -40,6 +42,8 @@ def _clean_segment(raw: str) -> str:
     text = "".join(ch for ch in text if unicodedata.category(ch) != "Cc").strip()
     if not text or text in (".", "..") or "/" in text or "\\" in text:
         raise ValueError("bad_path")
+    if text.endswith(".") or _RESERVED.fullmatch(text):  # names Windows can't create
+        raise ValueError("bad_path")
     if len(text.encode()) > MAX_SEGMENT_BYTES:
         raise ValueError("bad_path")
     return text
@@ -52,7 +56,10 @@ def clean_name(raw: str) -> str:
 def clean_relative_path(raw: str) -> str:
     if not raw or "\\" in raw or raw.startswith("/") or _DRIVE.match(raw):
         raise ValueError("bad_path")
-    return "/".join(_clean_segment(part) for part in raw.split("/"))
+    parts = raw.split("/")
+    if len(parts) > MAX_DEPTH:
+        raise ValueError("bad_path")
+    return "/".join(_clean_segment(part) for part in parts)
 
 
 def clean_mime(raw: str) -> str:
@@ -103,16 +110,32 @@ def write_chunk(path: Path, offset: int, data: bytes) -> None:
 
 
 class UploadLocks:
-    """One asyncio lock per upload, so bookkeeping for parallel chunks is serialised."""
+    """One asyncio lock per upload, so bookkeeping for parallel chunks is serialised.
 
-    def __init__(self):
+    Entries are forgotten only while unlocked (a held lock is never replaced, so waiters can't be
+    split), and the table is pruned once it holds more than `max_idle` entries.
+    """
+
+    def __init__(self, max_idle: int = 1000):
+        self.max_idle = max_idle
         self._locks: dict[str, asyncio.Lock] = {}
 
     def get(self, upload_id: str) -> asyncio.Lock:
-        return self._locks.setdefault(upload_id, asyncio.Lock())
+        lock = self._locks.get(upload_id)
+        if lock is None:
+            lock = self._locks[upload_id] = asyncio.Lock()
+            if len(self._locks) > self.max_idle:
+                for key in [k for k, v in self._locks.items() if not v.locked() and k != upload_id]:
+                    del self._locks[key]
+        return lock
 
     def drop(self, upload_id: str) -> None:
-        self._locks.pop(upload_id, None)
+        lock = self._locks.get(upload_id)
+        if lock is not None and not lock.locked():
+            del self._locks[upload_id]
+
+    def size(self) -> int:
+        return len(self._locks)
 
 
 def _load_open(db: Session, upload_id: str, user_id: int | None) -> Upload:
@@ -169,14 +192,14 @@ def _fsync_dir(path: Path) -> None:
         os.close(fd)
 
 
-def finalize_file(data_dir: Path, upload: Upload) -> None:
+def finalize_file(data_dir: Path, upload: Upload, kind: str = "files") -> None:
     """Move a fully received upload into files/ (same inode, no copy). Safe to call again.
 
     After a crash between the rename and the database commit, the temp file is gone and the
     stored file exists: that counts as done.
     """
     tmp = storage_path(data_dir, "tmp", upload.id)
-    dest = storage_path(data_dir, "files", upload.id)
+    dest = storage_path(data_dir, kind, upload.id)  # "files", or "vault" for My storage
     dest.parent.mkdir(parents=True, exist_ok=True)
     if not tmp.exists():
         if dest.exists():

@@ -14,3 +14,14 @@ v2 replaces the single-file Flask app (`ip.py`, kept under the git tag `v1`) wit
 | [docs/design/](docs/design/) | The approved UI mockup and reference screenshots; the frontend must match them |
 
 Start with the spec, then the roadmap in `docs/superpowers/plans/`.
+
+## Run it locally
+
+```
+make backend-dev      # API on :8000 (needs SHARED_PASSWORD in backend/.env)
+make frontend-dev     # http://localhost:5180
+make backend-test frontend-test frontend-e2e
+```
+
+Status: plans 1–5 done (backend, transfers, Sharing frontend, My storage, deploy). To install on the VM: [deploy/RUNBOOK.md](deploy/RUNBOOK.md). After go-live: speed benchmark and security re-test.
+

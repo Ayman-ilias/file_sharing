@@ -10,8 +10,6 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-import app.db
-
 # revision identifiers, used by Alembic.
 revision: str = '0002'
 down_revision: str | Sequence[str] | None = '0001'
@@ -29,9 +27,9 @@ def upgrade() -> None:
     sa.Column('file_count', sa.Integer(), nullable=False),
     sa.Column('recipient_ids', sa.JSON(), nullable=False),
     sa.Column('is_global', sa.Boolean(), nullable=False),
-    sa.Column('created_at', app.db.UTCDateTime(), nullable=False),
-    sa.Column('updated_at', app.db.UTCDateTime(), nullable=False),
-    sa.Column('completed_at', app.db.UTCDateTime(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('updated_at', sa.DateTime(), nullable=False),
+    sa.Column('completed_at', sa.DateTime(), nullable=True),
     sa.Column('item_id', sa.String(length=32), nullable=True),
     sa.Column('failed_paths', sa.JSON(), nullable=False, server_default='[]'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
@@ -46,10 +44,10 @@ def upgrade() -> None:
                                       server_default='0'))
         batch_op.add_column(sa.Column('storage_id', sa.String(length=32), nullable=True))
         batch_op.add_column(sa.Column('item_id', sa.String(length=32), nullable=True))
-        batch_op.add_column(sa.Column('updated_at', app.db.UTCDateTime(), nullable=True))
+        batch_op.add_column(sa.Column('updated_at', sa.DateTime(), nullable=True))
     op.execute("UPDATE uploads SET updated_at = created_at WHERE updated_at IS NULL")
     with op.batch_alter_table('uploads', schema=None) as batch_op:
-        batch_op.alter_column('updated_at', existing_type=app.db.UTCDateTime(), nullable=False)
+        batch_op.alter_column('updated_at', existing_type=sa.DateTime(), nullable=False)
 
     # ### end Alembic commands ###
 

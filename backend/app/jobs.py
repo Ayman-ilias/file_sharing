@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.config import Settings
 from app.db import utcnow
 from app.events import Audience, audience_for
-from app.models import Batch, FolderEntry, Item, Upload
+from app.models import AuthSession, Batch, FolderEntry, Item, Upload, VaultItem
 from app.storage import remove_stored
 
 log = logging.getLogger("fs.jobs")
@@ -82,19 +82,43 @@ def run_cleanup(db: Session, settings: Settings, now: datetime,
             db.rollback()
             report.errors += 1
             log.exception("cleanup: could not delete stale upload %s", up.id)
+    # My storage blobs that finished but never got their item (the tab closed before attaching)
+    unattached = db.scalars(select(Upload).where(
+        Upload.target == "vault", Upload.completed_at.is_not(None), Upload.item_id.is_(None),
+        Upload.updated_at <= idle_since)).all()
+    for up in unattached:
+        try:
+            remove_stored(settings.data_dir, "vault", up.id)
+            db.delete(up)
+            db.commit()
+            report.uploads_deleted += 1
+        except Exception:
+            db.rollback()
+            report.errors += 1
+            log.exception("cleanup: could not delete unattached vault blob %s", up.id)
+    try:
+        db.query(AuthSession).filter(AuthSession.expires_at <= now).delete()
+        db.commit()
+    except Exception:
+        db.rollback()
+        report.errors += 1
+        log.exception("cleanup: could not purge expired sessions")
     report.orphans_deleted = sweep_orphans(db, settings, idle_since)
     return report
 
 
 def sweep_orphans(db: Session, settings: Settings, older_than: datetime) -> int:
-    """Delete files in tmp/ and files/ that no row references (e.g. after a crash)."""
+    """Delete files in tmp/, files/ and vault/ that no row references (e.g. after a crash)."""
     known_files = set(db.scalars(select(Item.storage_id).where(Item.storage_id.is_not(None))))
     known_files |= set(db.scalars(select(FolderEntry.storage_id)))
     known_files |= set(db.scalars(select(Upload.storage_id).where(Upload.storage_id.is_not(None))))
     known_tmp = set(db.scalars(select(Upload.id).where(Upload.completed_at.is_(None))))
+    known_vault = set(db.scalars(select(VaultItem.blob_id).where(VaultItem.blob_id.is_not(None))))
+    known_vault |= set(db.scalars(select(Upload.storage_id).where(
+        Upload.target == "vault", Upload.storage_id.is_not(None))))
     cutoff = older_than.timestamp()
     removed = 0
-    for kind, known in (("files", known_files), ("tmp", known_tmp)):
+    for kind, known in (("files", known_files), ("tmp", known_tmp), ("vault", known_vault)):
         root = settings.data_dir / kind
         if not root.is_dir():
             continue

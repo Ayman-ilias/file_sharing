@@ -55,7 +55,8 @@ async def test_stream_frames_heartbeat_and_end_on_revoked_session():
     frame = await gen.__anext__()
     assert frame.startswith("event: item.deleted\ndata: ") and frame.endswith("\n\n")
     assert json.loads(frame.split("data: ", 1)[1]) == {"id": "x", "by": "rahim"}
-    assert await gen.__anext__() == ": ping\n\n"  # still allowed
+    # a named event, not an SSE comment: EventSource never shows comments to the page
+    assert await gen.__anext__() == "event: ping\ndata: {}\n\n"  # still allowed
     with pytest.raises(StopAsyncIteration):
         await gen.__anext__()  # session gone at the next heartbeat → stream ends
 

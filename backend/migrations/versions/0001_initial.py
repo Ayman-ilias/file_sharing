@@ -10,8 +10,6 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-import app.db
-
 # revision identifiers, used by Alembic.
 revision: str = '0001'
 down_revision: str | Sequence[str] | None = None
@@ -28,8 +26,8 @@ def upgrade() -> None:
     sa.Column('username', sa.String(length=64), nullable=False),
     sa.Column('password_hash', sa.String(length=255), nullable=True),
     sa.Column('is_global', sa.Boolean(), nullable=False),
-    sa.Column('disabled_at', app.db.UTCDateTime(), nullable=True),
-    sa.Column('created_at', app.db.UTCDateTime(), nullable=False),
+    sa.Column('disabled_at', sa.DateTime(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('email'),
     sa.UniqueConstraint('username')
@@ -40,7 +38,7 @@ def upgrade() -> None:
     sa.Column('action', sa.String(length=32), nullable=False),
     sa.Column('item_id', sa.String(length=32), nullable=True),
     sa.Column('item_name', sa.String(length=512), nullable=True),
-    sa.Column('at', app.db.UTCDateTime(), nullable=False),
+    sa.Column('at', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['actor_id'], ['users.id'], ondelete='SET NULL'),
     sa.PrimaryKeyConstraint('id')
     )
@@ -55,8 +53,8 @@ def upgrade() -> None:
     sa.Column('text_body', sa.Text(), nullable=True),
     sa.Column('storage_id', sa.String(length=32), nullable=True),
     sa.Column('file_count', sa.Integer(), nullable=True),
-    sa.Column('created_at', app.db.UTCDateTime(), nullable=False),
-    sa.Column('expires_at', app.db.UTCDateTime(), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('expires_at', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['sender_id'], ['users.id'], ),
     sa.PrimaryKeyConstraint('id')
     )
@@ -69,8 +67,8 @@ def upgrade() -> None:
     op.create_table('sessions',
     sa.Column('token_hash', sa.String(length=64), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('created_at', app.db.UTCDateTime(), nullable=False),
-    sa.Column('expires_at', app.db.UTCDateTime(), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('expires_at', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('token_hash')
     )
@@ -91,8 +89,8 @@ def upgrade() -> None:
     sa.Column('relative_path', sa.String(length=1024), nullable=True),
     sa.Column('recipient_ids', sa.JSON(), nullable=False),
     sa.Column('is_global', sa.Boolean(), nullable=False),
-    sa.Column('created_at', app.db.UTCDateTime(), nullable=False),
-    sa.Column('completed_at', app.db.UTCDateTime(), nullable=True),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('completed_at', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
@@ -108,8 +106,8 @@ def upgrade() -> None:
     sa.Column('blob_id', sa.String(length=32), nullable=True),
     sa.Column('size_bytes', sa.BigInteger(), nullable=False),
     sa.Column('version', sa.Integer(), nullable=False),
-    sa.Column('created_at', app.db.UTCDateTime(), nullable=False),
-    sa.Column('updated_at', app.db.UTCDateTime(), nullable=False),
+    sa.Column('created_at', sa.DateTime(), nullable=False),
+    sa.Column('updated_at', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
@@ -121,7 +119,7 @@ def upgrade() -> None:
     sa.Column('salt', sa.String(length=64), nullable=False),
     sa.Column('iterations', sa.Integer(), nullable=False),
     sa.Column('wrapped_key', sa.String(length=512), nullable=False),
-    sa.Column('updated_at', app.db.UTCDateTime(), nullable=False),
+    sa.Column('updated_at', sa.DateTime(), nullable=False),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('user_id')
     )

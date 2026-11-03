@@ -1,0 +1,44 @@
+# Southern IoT Files v2 (plan 5). Run through deploy/sif.sh, which passes
+# --env-file $SIF_HOME/.env so PUBLIC_PORT and TRUSTED_PROXIES come from that file.
+name: southern-iot-files
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
+
+services:
+  api:
+    build: ../backend
+    image: southern-iot-files-api:local
+    container_name: sif-api
+    user: "10001:10001"
+    env_file: ${SIF_HOME:-../..}/.env
+    environment:
+      DATA_DIR: /data
+      SERVE_FILES: "false"
+    volumes:
+      - ${SIF_HOME:-../..}/data:/data
+      - ${SIF_HOME:-../..}/backups:/backups
+    restart: unless-stopped
+    logging: *logging
+    # no ports: reachable only from web on this network
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+    image: southern-iot-files-web:local
+    container_name: sif-web
+    user: "10001:10001"
+    environment:
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-10.10.8.100}
+    ports:
+      # IPv4 only: an IPv6 connection would reach nginx from the Docker gateway address
+      - "0.0.0.0:${PUBLIC_PORT:-5000}:8080"
+    volumes:
+      - ${SIF_HOME:-../..}/data:/data:ro
+    depends_on:
+      # restart nginx when api is recreated, so it never keeps a stale api address
+      api: { condition: service_healthy, restart: true }
+    restart: unless-stopped
+    logging: *logging
